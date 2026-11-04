@@ -92,6 +92,10 @@ Your words are pasted within a second of letting go, and also copied, so you can
 
 ![The Voice page: engine, keys, and Clean-up with your own instructions](Design/Screenshots/voice.png)
 
+**No key yet?** Click **Set it up for me with Google**: a short guide shows the two Google screens you'll see and what to click, then MicFlow creates your free key in your own Google account and saves it. If Google asks you to accept the terms, MicFlow opens the page in the right account and notices by itself when you're done.
+
+![The step-by-step guide before signing in with Google](Design/Screenshots/key-guide.jpg)
+
 ### 🎛️ Preferences
 - **Your instructions:** tell clean-up who you are and how you write. *"I'm a UX designer: I talk about Figma, wireframes and user flows."*
 - **My words:** brand names, jargon, local or made-up words, spelled your way. *Add "Figma" once, and it's always written "Figma".*

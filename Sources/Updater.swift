@@ -13,6 +13,8 @@ final class Updater: ObservableObject {
     }
 
     @Published private(set) var state = State.idle
+    /// Why the last update didn't install, shown on the update banner.
+    @Published private(set) var lastError: String?
     let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
 
     private var downloadURL: URL?
@@ -23,6 +25,9 @@ final class Updater: ObservableObject {
     private let defaults = UserDefaults.standard
     private static let latest = URL(string: "https://api.github.com/repos/\(SiteContentStore.repository)/releases/latest")!
     private static let notifiedKey = "updateNotifiedVersion"
+    /// The version an automatic update last tried to install, and how many times.
+    private static let attemptVersionKey = "autoUpdateAttemptVersion"
+    private static let attemptCountKey = "autoUpdateAttemptCount"
 
     /// The admin build is made on its own Mac and never replaces itself with the public download.
     static var isEnabled: Bool {
@@ -35,6 +40,11 @@ final class Updater: ObservableObject {
 
     func start() {
         guard Self.isEnabled, timer == nil else { return }
+        // Running the version an update was installing: it worked, so start afresh next time.
+        if let tried = defaults.string(forKey: Self.attemptVersionKey), !Self.isNewer(tried, than: currentVersion) {
+            defaults.removeObject(forKey: Self.attemptVersionKey)
+            defaults.removeObject(forKey: Self.attemptCountKey)
+        }
         check(quietly: true)
         let timer = Timer(timeInterval: 6 * 60 * 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.check(quietly: true) }
@@ -69,7 +79,7 @@ final class Updater: ObservableObject {
                 }
                 downloadURL = url
                 state = .available(version: version, notes: Self.summary(json["body"] as? String ?? ""))
-                if autoInstallAllowed() {
+                if autoInstallAllowed(), autoAttemptsLeft(for: version) {
                     install()
                 } else {
                     notify(version)
@@ -102,6 +112,20 @@ final class Updater: ObservableObject {
         return false
     }
 
+    /// An automatic update tries a version twice at most: if it still hasn't installed (say, the app
+    /// is somewhere MicFlow can't write), it waits for the Update button instead of trying on every
+    /// launch.
+    private func autoAttemptsLeft(for version: String) -> Bool {
+        let count = defaults.string(forKey: Self.attemptVersionKey) == version ? defaults.integer(forKey: Self.attemptCountKey) : 0
+        guard count < 2 else {
+            lastError = lastError ?? "The automatic update didn't finish. Click Update now, or download MicFlow again from GitHub."
+            return false
+        }
+        defaults.set(version, forKey: Self.attemptVersionKey)
+        defaults.set(count + 1, forKey: Self.attemptCountKey)
+        return true
+    }
+
     /// Once per new version.
     private func notify(_ version: String) {
         guard defaults.string(forKey: Self.notifiedKey) != version else { return }
@@ -120,12 +144,17 @@ final class Updater: ObservableObject {
 
     func install() {
         guard Self.isEnabled, let downloadURL, case .available(let version, _) = state else { return }
+        let notes: String
+        if case .available(_, let n) = state { notes = n } else { notes = "" }
+        lastError = nil
         state = .installing("Downloading MicFlow \(version)…")
         Task {
             do {
                 try await installNow(from: downloadURL)
             } catch {
-                state = .failed(error.localizedDescription)
+                // Back to the banner with its Update button, and the reason under it.
+                lastError = error.localizedDescription
+                state = .available(version: version, notes: notes)
             }
         }
     }
@@ -149,7 +178,7 @@ final class Updater: ObservableObject {
         // Usually where MicFlow is now; but a copy macOS runs from a read-only temporary place
         // (opened straight from Downloads or the disk image) updates into Applications instead.
         let current = InstallLocation.target()
-        let staged = current.deletingLastPathComponent().appendingPathComponent(".MicFlow-update.app")
+        let staged = current.deletingLastPathComponent().appendingPathComponent(".MicFlow-update-\(UUID().uuidString.prefix(8)).app")
         do {
             let newApp = mount.appendingPathComponent("MicFlow.app")
             guard FileManager.default.fileExists(atPath: newApp.path) else { throw Failure("The download has no MicFlow app in it.") }
@@ -169,16 +198,37 @@ final class Updater: ObservableObject {
         }
         _ = try? await Self.run("/usr/bin/hdiutil", ["detach", mount.path, "-force"])
 
-        // Once MicFlow has quit: swap the apps and open the new one.
+        // Swap the apps now, while MicFlow is still running (macOS allows renaming a running app),
+        // so the update is complete even if the reopen below never happens.
+        state = .installing("Restarting MicFlow…")
+        let fm = FileManager.default
+        let old = current.deletingLastPathComponent().appendingPathComponent(".MicFlow-old-\(UUID().uuidString.prefix(8)).app")
+        let hadApp = fm.fileExists(atPath: current.path)
+        do {
+            if hadApp { try fm.moveItem(at: current, to: old) }
+        } catch {
+            try? fm.removeItem(at: staged)
+            throw Failure("MicFlow can't replace \(current.path) (it may belong to another account on this Mac). Download MicFlow again from GitHub and drag it to Applications.")
+        }
+        do {
+            try fm.moveItem(at: staged, to: current)
+        } catch {
+            if hadApp { try? fm.moveItem(at: old, to: current) }
+            try? fm.removeItem(at: staged)
+            throw Failure("The new version couldn't be put in place: \(error.localizedDescription)")
+        }
+
+        // Once this copy has quit: open the new one and tidy up.
         let script = """
             while /bin/kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do /bin/sleep 0.2; done
-            /bin/rm -rf "$1" && /bin/mv "$2" "$1" && /usr/bin/open "$1"
-            /bin/rm -rf "$3"
+            /usr/bin/open "$1"
+            /bin/rm -rf "$2" "$3" 2>/dev/null
             """
-        let swap = Process()
-        swap.executableURL = URL(fileURLWithPath: "/bin/sh")
-        swap.arguments = ["-c", script, "swap", current.path, staged.path, work.path]
-        try swap.run()
+        let reopen = Process()
+        reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+        reopen.arguments = ["-c", script, "reopen", current.path, old.path, work.path]
+        try? reopen.run()
+        try? await Task.sleep(nanoseconds: 600_000_000)
         NSApp.terminate(nil)
     }
 
@@ -239,6 +289,15 @@ enum InstallLocation {
         let own = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true)
         try? FileManager.default.createDirectory(at: own, withIntermediateDirectories: true)
         return own.appendingPathComponent("MicFlow.app")
+    }
+
+    /// Leftovers of an update that stopped half-way (old copies, a staged copy), next to the app.
+    static func cleanUpAfterUpdate() {
+        let folder = URL(fileURLWithPath: Bundle.main.bundlePath).deletingLastPathComponent()
+        guard !isTemporaryCopy, let items = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return }
+        for name in items where name.hasPrefix(".MicFlow-old-") || name.hasPrefix(".MicFlow-update") {
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+        }
     }
 
     /// Once, when MicFlow was opened from Downloads or the disk image: offers to move it to

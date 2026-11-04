@@ -394,7 +394,7 @@ final class VoiceTypingModel: ObservableObject {
     private var engineProblem: String? {
         switch engine {
         case .geminiLive:
-            return hasKey ? nil : "Paste your API key above to start."
+            return hasKey ? nil : "Add your API key in the API key card to start, or click Set it up for me."
         case .chrome:
             if !chrome.chromeInstalled { return "Model 2 needs Google Chrome installed." }
             return chrome.isConnected ? nil : "Waiting for the MicFlow tab in Chrome. Click \"Open the Model 2 tab\" below."
@@ -471,14 +471,28 @@ final class VoiceTypingModel: ObservableObject {
     /// Set while the app is paused by its blocking pop-up.
     var isLocked = false
 
+    /// A problem when the key is pressed, shown on the Voice page and, since you're usually in
+    /// another app, at the bottom of the screen for a few seconds.
+    private func startProblem(_ message: String) {
+        showingError = true
+        setStatus(message, error: true)
+        overlay.show(.failed(message))
+        let shown = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.phase == .idle, self.status == shown else { return }
+                self.overlay.hide()
+            }
+        }
+    }
+
     private func keyDown(_ key: VoiceKey) {
         guard phase == .idle, pressedAt == nil, !isLocked else { return }
         switch engine {
         case .chrome:
             guard chrome.isConnected else {
                 chrome.openPageIfNeeded()
-                showingError = true
-                setStatus("Open the MicFlow tab in Chrome (it just opened) and allow the microphone, then try again.", error: true)
+                startProblem("Open the MicFlow tab in Chrome (it just opened) and allow the microphone, then try again.")
                 return
             }
             chrome.beginListening(language: key.language)
@@ -486,19 +500,22 @@ final class VoiceTypingModel: ObservableObject {
             if let input = inputDevice() { try? recorder.start(input, gain: inputGain()) }
         case .geminiLive:
             guard let cachedKey else {
-                loadKeyIfNeeded()
-                showingError = true
-                setStatus("Waiting for your API key from the Keychain. If macOS asks, click Always Allow.", error: true)
+                if hasKey {
+                    loadKeyIfNeeded()
+                    startProblem("Getting your API key from the Keychain. If macOS asks, click Always Allow, then try again.")
+                } else {
+                    startProblem("Voice typing needs an API key first: open MicFlow › Voice Typing and add one, or click Set it up for me.")
+                }
                 return
             }
             guard let input = inputDevice() else {
-                setStatus("No microphone found. Pick one in the Sound tab.", error: true)
+                startProblem("No microphone found. Pick one in MicFlow › Sound.")
                 return
             }
             do {
                 try recorder.start(input, gain: inputGain())
             } catch {
-                setStatus(error.localizedDescription, error: true)
+                startProblem(error.localizedDescription)
                 return
             }
             let live = GeminiLiveTranscriber(key: cachedKey, inputRate: recorder.sampleRate)

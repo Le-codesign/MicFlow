@@ -18,12 +18,21 @@ struct MicFlowApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let model = BoostModel()
+    let model: BoostModel
+
+    override init() {
+        // Before anything starts (shortcuts, key remaps, updates): only one MicFlow at a time.
+        SingleInstance.ensure()
+        model = BoostModel()
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         HomeWindow.show(model: model)
+        InstallLocation.cleanUpAfterUpdate()
         InstallLocation.offerMoveIfNeeded()
         #if ADMIN
+        model.account.keySetup.previewIfAsked()
         CleanupSelfTest.runIfAsked()
         #endif
     }
@@ -146,5 +155,44 @@ struct BoostView: View {
         .frame(width: 400)
         .background(theme.frame)
         .fixedSize()
+    }
+}
+
+/// Two copies of MicFlow (say, one in Applications and one opened from the disk image, or one
+/// opened at login and one opened by hand) would both answer every shortcut and type twice.
+@MainActor
+enum SingleInstance {
+    static func ensure() {
+        let me = ProcessInfo.processInfo.processIdentifier
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+            .filter { $0.processIdentifier != me && !$0.isTerminated }
+        guard !others.isEmpty else { return }
+        let mine = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        func version(_ app: NSRunningApplication) -> String {
+            app.bundleURL.flatMap { Bundle(url: $0)?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String } ?? "0"
+        }
+        #if ADMIN
+        // The admin edition is the one to keep on its own Mac.
+        let replaceOthers = true
+        #else
+        // A newer copy (just downloaded) takes over from an older one; otherwise the one already running stays.
+        let replaceOthers = others.allSatisfy { Updater.isNewer(mine, than: version($0)) }
+        #endif
+        if replaceOthers {
+            others.forEach { $0.terminate() }
+            let deadline = Date().addingTimeInterval(4)
+            while others.contains(where: { !$0.isTerminated }), Date() < deadline {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            }
+            others.filter { !$0.isTerminated }.forEach { $0.forceTerminate() }
+            return
+        }
+        // Brings the copy that's already running forward (its Home window opens) and quits.
+        if let url = others.first?.bundleURL {
+            let opened = DispatchSemaphore(value: 0)
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, _ in opened.signal() }
+            _ = opened.wait(timeout: .now() + 3)
+        }
+        exit(0)
     }
 }

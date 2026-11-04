@@ -1168,22 +1168,16 @@ struct ActionPicker: View {
     }
 }
 
-/// "Set it up for me": sign in with Google, and MicFlow makes the key in the user's account.
+/// "Set it up for me": the guide, then Google's sign-in, then MicFlow makes the key in the user's account.
 struct KeySetupButton: View {
     @ObservedObject var account: Account
     var title = "Set it up for me with Google"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             PillButton(title: account.isWorking ? "Waiting for Google…" : title,
-                       systemImage: "sparkles", style: .cream) { account.signIn(setUpKey: true) }
-            if let message = account.keySetupMessage {
-                Note(text: message, isError: message.hasPrefix("Couldn't"))
-            }
-            if let fix = account.keySetupFixURL {
-                Link("Accept the terms", destination: fix)
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.cream)
-            }
+                       systemImage: "sparkles", style: .cream, action: account.keySetup.begin)
+            KeySetupStatus(flow: account.keySetup)
         }
     }
 }

@@ -187,6 +187,7 @@ private struct HomeView: View {
                 switch page {
                 case .home:
                     VStack(spacing: 10) {
+                        SetupBanner(voice: voice, openVoice: { page = .voice })
                         UpdateBanner(updater: model.updater, store: model.siteContent)
                         HomeBoard(voice: voice, log: log, theme: theme, openDictionary: { page = .dictionary })
                     }
@@ -204,6 +205,7 @@ private struct HomeView: View {
             .padding(.trailing, 10)
         }
         .background(theme.frame)
+        .background(KeyGuideHost(flow: model.account.keySetup))
         .overlay {
             if model.locked, let blocker = model.siteContent.content.block {
                 BlockerView(blocker: blocker, updater: model.updater, signIn: model.signInAction)

@@ -269,7 +269,7 @@ final class BoostModel: ObservableObject {
     @Published private(set) var locked = false
 
     /// Starts Google sign-in, when sign-in is set up.
-    var signInAction: (() -> Void)? { account.isConfigured ? { [weak self] in self?.account.signIn() } : nil }
+    var signInAction: (() -> Void)? { account.isConfigured ? { [weak self] in self?.account.signIn(setUpKey: false) } : nil }
 
     /// Shows or lifts your blocking pop-up from the CMS. Your admin build is never blocked, so you
     /// can always turn it off.
@@ -320,29 +320,6 @@ final class BoostModel: ObservableObject {
     private var contentTimer: Timer?
     private var prefsWatch: AnyCancellable?
     private var lastSavedPreferences: Data?
-
-    /// Makes a voice-typing key with Google's sign-in token and saves it like a pasted key.
-    func makeKey(googleToken: String) {
-        account.keySetupFixURL = nil
-        account.keySetupMessage = "Setting up voice typing…"
-        Task {
-            do {
-                let key = try await KeyProvisioner.createKey(googleToken: googleToken) { step in
-                    Task { @MainActor [weak self] in self?.account.keySetupMessage = step }
-                }
-                account.keySetupMessage = "Checking your new key…"
-                if let problem = await voiceTyping.saveKeyChecked(key) {
-                    account.keySetupMessage = "Couldn't set up the key automatically: the new key didn't work yet (\(problem)). Try again in a minute."
-                    return
-                }
-                account.keySetupMessage = "Voice typing is set up. Your key is saved in your Keychain and your account."
-                syncPreferences(loadFirst: false)
-            } catch {
-                account.keySetupMessage = "Couldn't set up the key automatically: \(error.localizedDescription)"
-                account.keySetupFixURL = (error as? KeyProvisioner.Failure)?.fixURL
-            }
-        }
-    }
 
     /// Saves your preferences to your account; right after signing in, first brings back what the
     /// account already has.
@@ -458,7 +435,12 @@ final class BoostModel: ObservableObject {
         account.onSignedIn = { [weak self] in self?.syncPreferences(loadFirst: true) }
         // No key yet: signing in also makes one in the user's own account.
         account.wantsKeySetup = { [weak self] in !(self?.voiceTyping.hasKey ?? true) }
-        account.onGoogleToken = { [weak self] token in self?.makeKey(googleToken: token) }
+        account.onGoogleToken = { [weak self] token in self?.account.keySetup.received(token: token) }
+        account.keySetup.signIn = { [weak self] in self?.account.signIn(setUpKey: true) }
+        account.keySetup.save = { [weak self] key in await self?.voiceTyping.saveKeyChecked(key) ?? "MicFlow closed" }
+        account.keySetup.afterSave = { [weak self] in self?.syncPreferences(loadFirst: false) }
+        account.keySetup.fallbackEmail = { [weak self] in self?.account.user?.email }
+        account.keySetup.hasKey = { [weak self] in self?.voiceTyping.hasKey ?? false }
         prefsWatch = voiceTyping.objectWillChange
             .debounce(for: .seconds(3), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.syncPreferences(loadFirst: false) }

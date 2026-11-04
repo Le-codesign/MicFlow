@@ -196,11 +196,10 @@ final class Account: NSObject, ObservableObject, ASWebAuthenticationPresentation
     static let cloudScope = "https://www.googleapis.com/auth/cloud-platform"
     /// Whether sign-in should also make an API key (set by the app: when there's no key yet).
     var wantsKeySetup: () -> Bool = { false }
-    /// Gets Google's access token when sign-in asked for the key permission.
-    var onGoogleToken: ((String) -> Void)?
-    /// Progress or problems while making the key, for the Account and Voice pages.
-    @Published var keySetupMessage: String?
-    @Published var keySetupFixURL: URL?
+    /// Gets Google's access token when sign-in asked for the key permission (nil: none came back).
+    var onGoogleToken: ((String?) -> Void)?
+    /// Making the key: the guide, progress, the terms step.
+    let keySetup = KeySetupFlow()
 
     /// Opens Google's sign-in in a secure browser sheet, then comes back to MicFlow (PKCE flow).
     /// With `setUpKey` (or when the app has no key yet), Google is also asked for permission to
@@ -236,9 +235,9 @@ final class Account: NSObject, ObservableObject, ASWebAuthenticationPresentation
                                                          json: ["auth_code": code, "code_verifier": verifier], token: nil)
                     self.session = try Self.session(from: data)
                     self.onSignedIn?()
-                    if setUpKey,
-                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let googleToken = json["provider_token"] as? String, !googleToken.isEmpty {
+                    if setUpKey {
+                        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                        let googleToken = (json?["provider_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                         self.onGoogleToken?(googleToken)
                     }
                 } catch {

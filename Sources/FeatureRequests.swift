@@ -240,6 +240,8 @@ struct FeatureRequestsPage: View {
     @State private var open: FeatureRequest?
     @State private var composing = false
     @State private var toDelete: FeatureRequest?
+    /// Signing in to post: the form opens once sign-in finishes.
+    @State private var wantsToCompose = false
 
     var body: some View {
         if !BackendConfig.isConfigured {
@@ -255,7 +257,7 @@ struct FeatureRequestsPage: View {
                          detail: "Vote for the ideas you want most; no sign-in needed. Sign in with Google to post an idea or comment.",
                          chip: "\(store.requests.count) ideas", systemImage: "lightbulb.fill") {
                     PillButton(title: "Request a feature", systemImage: "plus", style: .ink) {
-                        account.isSignedIn ? (composing = true) : account.signIn()
+                        if account.isSignedIn { composing = true } else { wantsToCompose = true; account.signIn(setUpKey: false) }
                     }
                     PillButton(title: "Refresh", systemImage: "arrow.clockwise", style: .orange, action: store.refresh)
                 }
@@ -286,6 +288,9 @@ struct FeatureRequestsPage: View {
                 }
             }
             .sheet(isPresented: $composing) { ComposeRequest(store: store) }
+            .onChange(of: account.isSignedIn) { signedIn in
+                if signedIn, wantsToCompose { wantsToCompose = false; composing = true }
+            }
             .alert("Delete this request?", isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } })) {
                 Button("Delete", role: .destructive) {
                     if let request = toDelete { Task { _ = await store.delete(request) } }
@@ -472,7 +477,9 @@ private struct RequestDetail: View {
                         PillButton(title: sending ? "Sending…" : "Comment", style: .yellow, action: send)
                     }
                 } else {
-                    PillButton(title: "Sign in with Google to comment", systemImage: "person.crop.circle", style: .ink, action: account.signIn)
+                    PillButton(title: "Sign in with Google to comment", systemImage: "person.crop.circle", style: .ink) {
+                        account.signIn(setUpKey: false)
+                    }
                 }
             }
             .foregroundStyle(Palette.ink)
@@ -538,6 +545,9 @@ private struct ComposeRequest: View {
                         }
                     }
                 }
+            }
+            if title.trimmingCharacters(in: .whitespaces).count < 4 {
+                Text("Add a headline of at least 4 letters to post.").font(.caption).foregroundStyle(.secondary)
             }
             if let error = store.error { Text(error).foregroundStyle(.red).font(.callout) }
             HStack {
@@ -612,16 +622,13 @@ struct AccountCard: View {
                 }
                 Note(text: "Your instructions, words, mix-ups and API key are saved to your account, so they come back if you reinstall MicFlow or use another Mac. Only your sign-in can read them back, though the app's maker runs the database and could technically see them.")
             } else {
+                // No key yet: signing in also makes one, so Google's screens are explained first.
                 PillButton(title: account.isWorking ? "Signing in…" : "Sign in with Google", systemImage: "person.crop.circle",
-                           style: .cream, action: account.signIn)
-                Note(text: "Optional. Signing in saves your instructions, words, mix-ups and API key to your account, and lets you post feature requests and comments.")
+                           style: .cream) { account.wantsKeySetup() ? account.keySetup.begin() : account.signIn(setUpKey: false) }
+                Note(text: "Optional. Signing in saves your instructions, words, mix-ups and API key to your account, and lets you post feature requests and comments. No API key yet? Signing in also sets one up for you.")
             }
             if let message = account.message { Note(text: message, isError: true) }
-            if let setup = account.keySetupMessage { Note(text: setup, isError: setup.hasPrefix("Couldn't")) }
-            if let fix = account.keySetupFixURL {
-                Link("Accept the terms", destination: fix)
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.cream)
-            }
+            KeySetupStatus(flow: account.keySetup)
         }
     }
 }

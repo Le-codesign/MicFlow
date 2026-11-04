@@ -24,6 +24,14 @@ struct UpdateBanner: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.ink.opacity(0.7))
                         .lineLimit(2)
+                    if let problem = updater.lastError {
+                        HStack(spacing: 6) {
+                            Text(problem).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Link("Download", destination: URL(string: "https://github.com/\(SiteContentStore.repository)/releases/latest")!)
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                    }
                 }
                 Spacer()
                 PillButton(title: "Update now", systemImage: "arrow.down.circle", style: .ink, action: updater.install)
@@ -91,5 +99,40 @@ struct BlockerView: View {
             .background(Color.white, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
             .shadow(radius: 30)
         }
+    }
+}
+
+/// On Home, while voice typing can't work yet: what's missing, with the button that fixes it.
+struct SetupBanner: View {
+    @ObservedObject var voice: VoiceTypingModel
+    let openVoice: () -> Void
+
+    var body: some View {
+        if voice.enabled, voice.needsAccessibility {
+            banner("Allow MicFlow in Accessibility",
+                   "Without it, MicFlow can't hear your voice key or type for you.",
+                   button: "Open Accessibility Settings", action: voice.openAccessibilitySettings)
+        } else if voice.enabled, voice.engine == .geminiLive, !voice.hasKey {
+            banner("Finish setting up voice typing",
+                   "Add an API key, or let MicFlow set one up for you with Google.",
+                   button: "Set up voice typing", action: openVoice)
+        }
+    }
+
+    private func banner(_ title: String, _ detail: String, button: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 18, weight: .bold)).foregroundStyle(Palette.white)
+                .frame(width: 40, height: 40).background(Palette.orange, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 15, weight: .bold))
+                Text(detail).font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.7))
+            }
+            Spacer()
+            PillButton(title: button, systemImage: "arrow.right", style: .ink, action: action)
+        }
+        .foregroundStyle(Palette.ink)
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(Palette.yellow, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }

@@ -10,19 +10,64 @@ enum KeyProvisioner {
         let errorDescription: String?
         /// Where the user can fix it (e.g. accept the Cloud terms), if anywhere.
         let fixURL: URL?
-        init(_ message: String, fix: URL? = nil) {
+        /// The account still has to accept terms on `fixURL`; trying again afterwards works.
+        var needsTerms = false
+        /// The project that was being set up, so a retry goes straight back to it.
+        var project: String?
+        init(_ message: String, fix: URL? = nil, needsTerms: Bool = false) {
             errorDescription = message
             fixURL = fix
+            self.needsTerms = needsTerms
         }
+    }
+
+    /// What Google's sign-in token allows: whose account it is and which permissions were ticked.
+    struct TokenInfo {
+        var email: String?
+        var scopes: Set<String> = []
+        var expiresIn: TimeInterval?
+    }
+
+    /// Asks Google about the token (sent in the request body, never in the address).
+    static func tokenInfo(_ token: String) async -> TokenInfo? {
+        var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/tokeninfo")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        var form = URLComponents()
+        form.queryItems = [URLQueryItem(name: "access_token", value: token)]
+        request.httpBody = form.percentEncodedQuery?.data(using: .utf8)
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        let expires = (json["expires_in"] as? String).flatMap(Double.init) ?? (json["expires_in"] as? Double)
+        return TokenInfo(email: json["email"] as? String,
+                         scopes: Set(((json["scope"] as? String) ?? "").split(separator: " ").map(String.init)),
+                         expiresIn: expires)
+    }
+
+    /// A Google page opened in the given account (when the browser is signed in to several).
+    static func page(_ url: URL, as email: String?) -> URL {
+        guard let email, !email.isEmpty, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        parts.queryItems = (parts.queryItems ?? []) + [URLQueryItem(name: "authuser", value: email)]
+        return parts.url ?? url
     }
 
     /// The model's API, which every key MicFlow makes is restricted to.
     private static let service = "generativelanguage.googleapis.com"
 
     /// Google's page where an account accepts the model API's own terms (once).
-    static let termsPage = URL(string: "https://console.developers.google.com/terms/generative-language-api")!
+    static let termsPage = URL(string: "https://console.cloud.google.com/terms/generative-language-api")!
 
-    static func createKey(googleToken: String, progress: @escaping @Sendable (String) -> Void = { _ in }) async throws -> String {
+    /// With `project` (from an earlier try that stopped at the terms), only that project is tried
+    /// again: one or two requests instead of looking through every project.
+    static func createKey(googleToken: String, project known: String? = nil,
+                         progress: @escaping @Sendable (String) -> Void = { _ in }) async throws -> String {
+        if let known {
+            try await enable(project: known, token: googleToken)
+            progress("Creating your key…")
+            return try await makeKey(project: known, token: googleToken)
+        }
         progress("Finding your project…")
         let projects = try await listProjects(token: googleToken)
         // A project where the API is already on needs no terms and no switching on.
@@ -32,7 +77,7 @@ enum KeyProvisioner {
         }
         let project = try await reuseOrCreateProject(projects, token: googleToken, progress: progress)
         progress("Switching on voice typing for your project…")
-        try await enableService(project: project, token: googleToken)
+        try await enable(project: project, token: googleToken)
         progress("Creating your key…")
         return try await makeKey(project: project, token: googleToken)
     }
@@ -69,6 +114,16 @@ enum KeyProvisioner {
                                        body: ["projectId": id, "displayName": "MicFlow"])
         try await wait(for: operation, base: "https://cloudresourcemanager.googleapis.com/v3/", token: token)
         return id
+    }
+
+    /// Switches the API on, remembering the project in a terms failure.
+    private static func enable(project: String, token: String) async throws {
+        do {
+            try await enableService(project: project, token: token)
+        } catch var failure as Failure where failure.needsTerms {
+            failure.project = project
+            throw failure
+        }
     }
 
     private static func enableService(project: String, token: String) async throws {
@@ -132,12 +187,11 @@ enum KeyProvisioner {
             voiceLog.info("Key setup: \(method, privacy: .public) \(path, privacy: .public) -> HTTP \(status): \(String(data: data, encoding: .utf8)?.prefix(1500) ?? "", privacy: .public)")
             let reasons = ((error?["details"] as? [[String: Any]]) ?? []).compactMap { $0["reason"] as? String }
             if reasons.contains("UREQ_TOS_NOT_ACCEPTED") || message.contains("generative-language-api") {
-                throw Failure("One last step: accept the model's terms on your provider's page (one click), then click the button again.",
-                              fix: termsPage)
+                throw Failure("One more click: accept the voice model's terms on Google's page.", fix: termsPage, needsTerms: true)
             }
             if message.lowercased().contains("terms of service"), path.contains("cloudresourcemanager") {
-                throw Failure("First accept your provider's cloud terms (one click), then try again.",
-                              fix: URL(string: "https://console.cloud.google.com/"))
+                throw Failure("One more click: accept Google Cloud's terms.", fix: URL(string: "https://console.cloud.google.com/"),
+                              needsTerms: true)
             }
             if status == 403, message.lowercased().contains("has not been used") || message.lowercased().contains("disabled") {
                 throw Failure("Automatic setup isn't switched on for MicFlow yet. Paste a key instead for now.")
