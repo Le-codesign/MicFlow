@@ -377,10 +377,10 @@ struct KeySetupStatus: View {
             TermsPanel(flow: flow)
         case .freePlanOff:
             InfoPanel(icon: "exclamationmark.triangle", title: "Google turned off the free plan for this Google account",
-                      detail: "MicFlow made the key, but Google doesn't let this account use it for free: every request is refused until billing is added. This is Google's decision for the whole account (many new accounts see it right now), so a new key in the same account won't help.") {
+                      detail: "MicFlow made the key, but Google doesn't let this account use it for free: every request is refused until billing is added. This is Google's decision for the whole account and mostly hits brand-new accounts, so a new key in the same account won't help.") {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("What you can do").font(.system(size: 12, weight: .bold))
-                    Text("• Set it up again and pick a different Google account on Google's screen.")
+                    Text("• Set it up again and pick a Google account you've used for a while.")
                     Text("• Or switch to Model 2: it needs no key at all.")
                     Text("• Or add billing to that Google account (paid).")
                 }
@@ -418,6 +418,7 @@ private struct TermsPanel: View {
                     Text("Page 1 accepted. MicFlow opened page 2 for you: it looks almost the same, but it's a different page. Click Accept there too.")
                         .font(.system(size: 12, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
                 }
+                .foregroundStyle(Palette.ink)
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Palette.mint, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

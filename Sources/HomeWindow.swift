@@ -192,7 +192,7 @@ private struct HomeView: View {
                         SetupBanner(voice: voice, openVoice: { page = .voice })
                         UpdateBanner(updater: model.updater, store: model.siteContent)
                         if voice.needsKeySetup {
-                            HomeKeySetup(voice: voice, account: model.account)
+                            HomeKeySetup(voice: voice, account: model.account, theme: theme)
                         } else {
                             HomeBoard(voice: voice, log: log, theme: theme, openDictionary: { page = .dictionary })
                         }

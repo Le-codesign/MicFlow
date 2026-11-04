@@ -52,6 +52,20 @@ final class VoiceTypingModel: ObservableObject {
         didSet { defaults.set(enabled, forKey: Keys.enabled); applyEnabled() }
     }
     @Published private(set) var hasKey = KeychainSecret.geminiKey.exists()
+    /// The saved key was refused because Google turned off the free plan for its Google account:
+    /// Home then asks for a new key (the old one is kept until a new one replaces it).
+    @Published private(set) var keyFreePlanOff = UserDefaults.standard.bool(forKey: "keyFreePlanOff")
+
+    private func noteProblem(_ message: String) {
+        guard message.contains(ProviderName.freePlanOff), !keyFreePlanOff else { return }
+        keyFreePlanOff = true
+        UserDefaults.standard.set(true, forKey: "keyFreePlanOff")
+    }
+
+    private func keyChanged() {
+        keyFreePlanOff = false
+        UserDefaults.standard.removeObject(forKey: "keyFreePlanOff")
+    }
     /// Gemini Live's key, and Chrome's Bengali key.
     @Published private(set) var hotkey: Int64
     @Published private(set) var hotkeyName: String
@@ -190,6 +204,7 @@ final class VoiceTypingModel: ObservableObject {
             KeychainSecret.geminiKey.save(key)
             cachedKey = key
             hasKey = true
+            keyChanged()
             showingError = false
             updateStatus()
             return nil
@@ -209,6 +224,7 @@ final class VoiceTypingModel: ObservableObject {
                 KeychainSecret.geminiKey.save(key)
                 cachedKey = key
                 hasKey = true
+                keyChanged()
                 updateStatus()
             } catch {
                 showingError = true
@@ -238,6 +254,7 @@ final class VoiceTypingModel: ObservableObject {
             KeychainSecret.geminiKey.save(key)
             cachedKey = key
             hasKey = true
+            keyChanged()
             updateStatus()
         }
     }
@@ -247,6 +264,7 @@ final class VoiceTypingModel: ObservableObject {
         KeychainSecret.geminiKey.delete()
         cachedKey = nil
         hasKey = false
+        keyChanged()
         updateStatus()
     }
 
@@ -475,6 +493,7 @@ final class VoiceTypingModel: ObservableObject {
     /// A problem when the key is pressed, shown on the Voice page and, since you're usually in
     /// another app, at the bottom of the screen for a few seconds.
     private func startProblem(_ message: String) {
+        noteProblem(message)
         showingError = true
         setStatus(message, error: true)
         overlay.show(.failed(message))
@@ -637,6 +656,7 @@ final class VoiceTypingModel: ObservableObject {
                 return
             } catch {
                 overlay.show(.failed(error.localizedDescription))
+                noteProblem(error.localizedDescription)
                 showingError = true
                 setStatus("Couldn't transcribe: \(error.localizedDescription)", error: true)
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
