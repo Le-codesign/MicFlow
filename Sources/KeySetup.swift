@@ -14,6 +14,8 @@ final class KeySetupFlow: ObservableObject {
         /// The Google Cloud box wasn't ticked on Google's permission screen.
         case missingPermission
         case failed(String)
+        /// Google switched off the free plan for this Google account (its keys need billing).
+        case freePlanOff
         case done
     }
 
@@ -29,6 +31,8 @@ final class KeySetupFlow: ObservableObject {
     @Published private(set) var termsID: String?
     /// How many terms pages were accepted while waiting (Google can ask for two in a row).
     @Published private(set) var acceptedTerms = 0
+    /// Just went from one terms page to the next: the card says so in green for a while.
+    @Published private(set) var justAccepted = false
 
     /// Set by the app.
     var signIn: () -> Void = {}
@@ -36,6 +40,7 @@ final class KeySetupFlow: ObservableObject {
     var afterSave: () -> Void = {}
     var fallbackEmail: () -> String? = { nil }
     var hasKey: () -> Bool = { false }
+    var useModel2: () -> Void = {}
 
     static let skipGuideKey = "skipGoogleKeyGuide"
     private var token: String?
@@ -59,7 +64,8 @@ final class KeySetupFlow: ObservableObject {
     func previewIfAsked() {
         switch ProcessInfo.processInfo.environment["MICFLOW_PREVIEW_KEYSETUP"] {
         case "terms": email = "someone@gmail.com"; termsID = "universal"; stage = .needsTerms
-        case "terms2": email = "someone@gmail.com"; termsID = "generative-language-api"; acceptedTerms = 1; stage = .needsTerms
+        case "terms2": email = "someone@gmail.com"; termsID = "generative-language-api"; acceptedTerms = 1; justAccepted = true; stage = .needsTerms
+        case "freeplan": stage = .freePlanOff
         case "tick": stage = .missingPermission
         default: break
         }
@@ -71,6 +77,13 @@ final class KeySetupFlow: ObservableObject {
     /// The button: the guide first (unless turned off), then Google.
     func begin() {
         if UserDefaults.standard.bool(forKey: Self.skipGuideKey) { continueToGoogle() } else { showGuide = true }
+    }
+
+    /// Back to the start (e.g. after switching to Model 2).
+    func reset() {
+        stop()
+        stage = .idle
+        justAccepted = false
     }
 
     func continueToGoogle() {
@@ -128,7 +141,9 @@ final class KeySetupFlow: ObservableObject {
             }
             stage = .working("Checking your new key…")
             if let problem = await save(key) {
-                stage = .failed("The new key didn't work yet (\(problem)). Try again in a minute.")
+                stop()
+                stage = problem == ProviderName.freePlanOff ? .freePlanOff
+                    : .failed("The new key didn't work yet (\(problem)). Try again in a minute.")
                 return false
             }
             stage = .done
@@ -139,7 +154,15 @@ final class KeySetupFlow: ObservableObject {
             project = failure.project ?? project
             termsURL = failure.fixURL ?? KeyProvisioner.termsPage
             let id = failure.termsID ?? "cloud"
-            if stage == .needsTerms, let previous = termsID, previous != id { acceptedTerms += 1 }
+            if stage == .needsTerms, let previous = termsID, previous != id {
+                // The first page went through and Google wants the next one: say so clearly, and
+                // open it straight away (both pages look almost the same).
+                acceptedTerms += 1
+                termsID = id
+                justAccepted = true
+                NSSound(named: "Glass")?.play()
+                NSWorkspace.shared.open(termsPage)
+            }
             termsID = id
             if stage != .needsTerms { stage = .needsTerms; startWatching() }
             return true
@@ -159,6 +182,7 @@ final class KeySetupFlow: ObservableObject {
     var termsPage: URL { KeyProvisioner.page(termsURL, as: email) }
 
     func openTerms() {
+        justAccepted = false
         NSWorkspace.shared.open(termsPage)
         if !isWatching { startWatching() }
     }
@@ -337,7 +361,7 @@ struct KeySetupStatus: View {
             }
             .foregroundStyle(Palette.cream)
         case .done:
-            Note(text: "Voice typing is set up. Your key is saved in your Keychain and your account.")
+            Note(text: "Voice typing is set up. Your key is saved in this Mac's Keychain.")
         case .failed(let message):
             VStack(alignment: .leading, spacing: 6) {
                 Note(text: "Couldn't set up the key automatically: \(message)", isError: true)
@@ -351,6 +375,21 @@ struct KeySetupStatus: View {
             }
         case .needsTerms:
             TermsPanel(flow: flow)
+        case .freePlanOff:
+            InfoPanel(icon: "exclamationmark.triangle", title: "Google turned off the free plan for this Google account",
+                      detail: "MicFlow made the key, but Google doesn't let this account use it for free: every request is refused until billing is added. This is Google's decision for the whole account (many new accounts see it right now), so a new key in the same account won't help.") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("What you can do").font(.system(size: 12, weight: .bold))
+                    Text("• Set it up again and pick a different Google account on Google's screen.")
+                    Text("• Or switch to Model 2: it needs no key at all.")
+                    Text("• Or add billing to that Google account (paid).")
+                }
+                .font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.75))
+                HStack(spacing: 8) {
+                    PillButton(title: "Use another Google account", systemImage: "person.2", style: .ink, action: flow.continueToGoogle)
+                    PillButton(title: "Switch to Model 2", systemImage: "waveform", style: .cream, action: flow.useModel2)
+                }
+            }
         }
     }
 }
@@ -358,40 +397,120 @@ struct KeySetupStatus: View {
 private struct TermsPanel: View {
     @ObservedObject var flow: KeySetupFlow
 
-    /// What Google calls the terms it's asking for.
-    private var termsName: String {
+    /// The usual order: the Google APIs terms (accounts new to Google Cloud), then the model's own.
+    private enum Page { case apis, model, cloud }
+    private var current: Page {
         switch flow.termsID {
-        case "universal": return "the Google APIs Terms of Service"
-        case "cloud": return "the Google Cloud Terms of Service"
-        default: return "the terms for the voice model's API"
+        case "universal": return .apis
+        case "cloud": return .cloud
+        default: return .model
         }
     }
+    /// Which page this is out of how many, as far as MicFlow can tell.
+    private var number: Int { current == .model ? 2 : 1 }
+    private var total: Int { current == .cloud ? 1 : 2 }
 
     var body: some View {
-        InfoPanel(icon: "doc.text.magnifyingglass",
-                  title: flow.acceptedTerms > 0 ? "Done. Google needs one more page accepted" : "One more click: accept the terms",
-                  detail: (flow.acceptedTerms > 0 ? "Thanks, that one worked. " : "")
-                    + "Google needs your account to accept \(termsName) once. Open the page, click Accept, and come back. MicFlow notices by itself.") {
-            GuideImage(name: "Guide-Accept", maxHeight: 150)
-            HStack(spacing: 10) {
-                PillButton(title: "Open the terms page", systemImage: "arrow.up.right", style: .ink, action: flow.openTerms)
-                if flow.isWatching {
-                    ProgressView().controlSize(.small)
-                    Text(flow.isChecking ? "Checking…" : "Checking automatically").font(.system(size: 11))
-                        .foregroundStyle(Palette.ink.opacity(0.6))
-                } else {
-                    PillButton(title: flow.hasValidToken ? "Check again" : "Sign in again", systemImage: "arrow.clockwise",
-                               style: .cream, action: flow.checkNow)
+        VStack(alignment: .leading, spacing: 10) {
+            if flow.justAccepted {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.mintText)
+                    Text("Page 1 accepted. MicFlow opened page 2 for you: it looks almost the same, but it's a different page. Click Accept there too.")
+                        .font(.system(size: 12, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.mint, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            InfoPanel(icon: "doc.text.magnifyingglass",
+                      title: total > 1 ? "Accept Google's terms: page \(number) of \(total)" : "Accept Google Cloud's terms",
+                      detail: "Google needs your Google account to accept its terms once before it makes a key. Click Accept on each page; MicFlow notices by itself and moves on.") {
+                if total > 1 {
+                    VStack(alignment: .leading, spacing: 6) {
+                        TermsRow(number: 1, title: "Google APIs Terms of Service", address: "…/terms/universal",
+                                 state: current == .apis ? .now : .done(flow.acceptedTerms > 0 ? "Accepted" : "Already accepted"))
+                        TermsRow(number: 2, title: "The voice model's terms", address: "…/terms/generative-language-api",
+                                 state: current == .model ? .now : .next)
+                    }
+                    Text("The two pages look almost the same. The page's address shows which one you're on.")
+                        .font(.system(size: 11)).foregroundStyle(Palette.ink.opacity(0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                GuideImage(name: "Guide-Accept", maxHeight: 150)
+                HStack(spacing: 10) {
+                    PillButton(title: total > 1 ? "Open page \(number)" : "Open the terms page", systemImage: "arrow.up.right",
+                               style: .ink, action: flow.openTerms)
+                    if flow.isWatching {
+                        ProgressView().controlSize(.small)
+                        Text(flow.isChecking ? "Checking…" : "Checking automatically").font(.system(size: 11))
+                            .foregroundStyle(Palette.ink.opacity(0.6))
+                    } else {
+                        PillButton(title: flow.hasValidToken ? "Check again" : "Sign in again", systemImage: "arrow.clockwise",
+                                   style: .cream, action: flow.checkNow)
+                    }
+                }
+                if let email = flow.email {
+                    Text("The page opens in your Google account **\(email)**.").font(.system(size: 12))
+                }
+                Divider().padding(.vertical, 2)
+                Text("Does it say \"already been accepted\" but MicFlow still waits?").font(.system(size: 12, weight: .bold))
+                Text("Then the page opened in a different Google account. Click your picture at the top right of the page, switch to \(flow.email ?? "the account you signed in with"), and click Accept there.")
+                    .font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
+                GuideImage(name: "Guide-OtherAccount", maxHeight: 90)
+            }
+        }
+    }
+}
+
+/// One terms page in the list: done, the one to accept now, or next.
+private struct TermsRow: View {
+    enum State { case done(String), now, next }
+    let number: Int
+    let title: String
+    let address: String
+    let state: State
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Group {
+                switch state {
+                case .done: Image(systemName: "checkmark").foregroundStyle(Palette.white)
+                default: Text("\(number)").foregroundStyle(isNow ? Palette.white : Palette.ink.opacity(0.5))
                 }
             }
-            if let email = flow.email {
-                Text("The page opens in your Google account **\(email)**.").font(.system(size: 12))
+            .font(.system(size: 11, weight: .heavy))
+            .frame(width: 22, height: 22)
+            .background(background, in: Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 12, weight: isNow ? .bold : .medium))
+                Text(address).font(.system(size: 10, design: .monospaced)).foregroundStyle(Palette.ink.opacity(0.5))
             }
-            Divider().padding(.vertical, 2)
-            Text("Does it say \"already been accepted\" but MicFlow still waits?").font(.system(size: 12, weight: .bold))
-            Text("Then the page opened in a different Google account. Click your picture at the top right of the page, switch to \(flow.email ?? "the account you signed in with"), and click Accept there.")
-                .font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
-            GuideImage(name: "Guide-OtherAccount", maxHeight: 90)
+            Spacer()
+            Text(label).font(.system(size: 10, weight: .bold))
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .foregroundStyle(isNow ? Palette.white : Palette.ink.opacity(0.6))
+                .background(isNow ? Palette.orange : Color.black.opacity(0.06), in: Capsule())
+        }
+        .padding(8)
+        .background(isNow ? Color.white : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(isNow ? Palette.orange : .clear, lineWidth: 1.5))
+        .opacity(isNext ? 0.6 : 1)
+    }
+
+    private var isNow: Bool { if case .now = state { return true } else { return false } }
+    private var isNext: Bool { if case .next = state { return true } else { return false } }
+    private var background: Color {
+        switch state {
+        case .done: return Palette.mintText
+        case .now: return Palette.orange
+        case .next: return Color.black.opacity(0.08)
+        }
+    }
+    private var label: String {
+        switch state {
+        case .done(let text): return text
+        case .now: return "Accept now"
+        case .next: return "Next, if Google asks"
         }
     }
 }

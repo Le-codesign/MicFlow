@@ -9,7 +9,7 @@ let voiceLog = Logger(subsystem: "local.micboost.MicBoost", category: "voice")
 /// seconds: the raw text then stays.
 enum Polisher {
     /// The fastest model. (The bigger one was a fallback, but it adds seconds and shares the quota.)
-    private static let model = "gemini-3.5-flash-lite"
+    static let model = "gemini-3.5-flash-lite"
     /// Seconds before a second request is sent.
     private static let hedge = 0.9
     private static let base = "https://generativelanguage.googleapis.com/v1beta/models"

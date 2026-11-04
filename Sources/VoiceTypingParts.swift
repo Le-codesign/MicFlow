@@ -128,6 +128,27 @@ enum GeminiClient {
             let message = (json?["error"] as? [String: Any])?["message"] as? String
             throw Failure(message: ProviderName.hide(message ?? "This key wasn't accepted."))
         }
+        try await checkFreePlan(key: key)
+    }
+
+    /// Google can switch off the free plan for a whole account; its keys then list models fine but
+    /// refuse every request. One tiny request (one word out) finds that out before the key is saved.
+    /// Anything else that goes wrong here (busy, a quota hit) doesn't stop the key from being saved.
+    private static func checkFreePlan(key: String) async throws {
+        var request = URLRequest(url: URL(string: "\(base)/models/\(Polisher.model):generateContent")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "contents": [["parts": [["text": "Hi"]]]],
+            "generationConfig": ["maxOutputTokens": 1],
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 403 else { return }
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let message = (json?["error"] as? [String: Any])?["message"] as? String ?? ""
+        if ProviderName.isFreePlanOff(message) { throw Failure(message: ProviderName.freePlanOff) }
     }
 }
 
@@ -181,19 +202,32 @@ enum KeyNames {
 /// MicFlow doesn't say which company's models it uses. Messages that come from the service itself
 /// (a refused key, a used-up quota) can name it, so those names are taken out before they're shown.
 enum ProviderName {
+    /// Google's "The Gemini API free tier is not available for this project": its decision for
+    /// the whole Google account, which a new key or a new project doesn't change.
+    static func isFreePlanOff(_ message: String) -> Bool {
+        message.range(of: "free tier is not available", options: .caseInsensitive) != nil
+    }
+
+    static let freePlanOff = "The provider has turned off the free plan for this Google account, so its keys don't work without billing. Set up a key with a different Google account, or switch to Model 2, which needs no key."
+
     static func hide(_ message: String) -> String {
+        if isFreePlanOff(message) { return freePlanOff }
         let replacements: [(String, String)] = [
             ("generativelanguage\\.googleapis\\.com", "the service"),
             ("(Google )?AI Studio", "your provider's dashboard"),
             ("Generative Language API", "the API"),
-            ("Gemini API", "the API"),
+            ("(the )?Gemini API", "the API"),
             ("gemini-[0-9a-z.\\-]+", "the model"),
             ("Gemini", "the model"),
             ("Google Cloud", "the provider"),
             ("Google", "the provider"),
         ]
-        return replacements.reduce(message) { text, pair in
+        let hidden = replacements.reduce(message) { text, pair in
             text.replacingOccurrences(of: pair.0, with: pair.1, options: [.regularExpression, .caseInsensitive])
         }
+        .replacingOccurrences(of: "\\bthe the\\b", with: "the", options: [.regularExpression, .caseInsensitive])
+        // A sentence that now starts with "the" gets its capital back.
+        guard let first = hidden.first, first.isLowercase, message.first?.isUppercase == true else { return hidden }
+        return first.uppercased() + hidden.dropFirst()
     }
 }

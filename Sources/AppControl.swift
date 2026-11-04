@@ -112,10 +112,6 @@ struct SetupBanner: View {
             banner("Allow MicFlow in Accessibility",
                    "Without it, MicFlow can't hear your voice key or type for you.",
                    button: "Open Accessibility Settings", action: voice.openAccessibilitySettings)
-        } else if voice.enabled, voice.engine == .geminiLive, !voice.hasKey {
-            banner("Finish setting up voice typing",
-                   "Add an API key, or let MicFlow set one up for you with Google.",
-                   button: "Set up voice typing", action: openVoice)
         }
     }
 

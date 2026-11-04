@@ -442,9 +442,16 @@ final class BoostModel: ObservableObject {
             guard let self else { return "MicFlow closed" }
             return await self.voiceTyping.saveKeyChecked(key)
         }
-        account.keySetup.afterSave = { [weak self] in self?.syncPreferences(loadFirst: false) }
+        account.keySetup.afterSave = { [weak self] in
+            self?.voiceTyping.enabled = true
+            self?.syncPreferences(loadFirst: false)
+        }
         account.keySetup.fallbackEmail = { [weak self] in self?.account.user?.email }
         account.keySetup.hasKey = { [weak self] in self?.voiceTyping.hasKey ?? false }
+        account.keySetup.useModel2 = { [weak self] in
+            self?.voiceTyping.engine = .chrome
+            self?.account.keySetup.reset()
+        }
         prefsWatch = voiceTyping.objectWillChange
             .debounce(for: .seconds(3), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.syncPreferences(loadFirst: false) }

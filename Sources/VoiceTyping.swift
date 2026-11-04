@@ -217,10 +217,11 @@ final class VoiceTypingModel: ObservableObject {
         }
     }
 
-    /// What's saved to your account when you're signed in.
+    /// What's saved to your account when you're signed in. The API key never is: it stays in this
+    /// Mac's Keychain only, so nobody but this Mac can see or use it.
     func savedPreferences() -> SavedPreferences {
         SavedPreferences(instructions: yourInstructions, instructions_enabled: instructionsEnabled,
-                         my_words: myWords, mix_ups: mixUps, api_key: cachedKey)
+                         my_words: myWords, mix_ups: mixUps, api_key: nil)
     }
 
     /// Brings back what your account has: words and mix-ups are added to the ones here, and the
@@ -504,7 +505,7 @@ final class VoiceTypingModel: ObservableObject {
                     loadKeyIfNeeded()
                     startProblem("Getting your API key from the Keychain. If macOS asks, click Always Allow, then try again.")
                 } else {
-                    startProblem("Voice typing needs an API key first: open MicFlow › Voice Typing and add one, or click Set it up for me.")
+                    startProblem("Voice typing needs to be set up first: open MicFlow, and Home shows the two ways (about a minute).")
                 }
                 return
             }

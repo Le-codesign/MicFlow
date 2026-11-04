@@ -183,13 +183,19 @@ private struct HomeView: View {
     var body: some View {
         HStack(spacing: 10) {
             Sidebar(page: $page, dark: $dark, theme: theme)
-            Group {
+            VStack(spacing: 10) {
+                // Until voice typing has a key, every page but Home points back to Home's setup.
+                if page != .home { VoiceSetupBanner(voice: voice, openHome: { page = .home }) }
                 switch page {
                 case .home:
                     VStack(spacing: 10) {
                         SetupBanner(voice: voice, openVoice: { page = .voice })
                         UpdateBanner(updater: model.updater, store: model.siteContent)
-                        HomeBoard(voice: voice, log: log, theme: theme, openDictionary: { page = .dictionary })
+                        if voice.needsKeySetup {
+                            HomeKeySetup(voice: voice, account: model.account)
+                        } else {
+                            HomeBoard(voice: voice, log: log, theme: theme, openDictionary: { page = .dictionary })
+                        }
                     }
                 case .dictionary: DictionaryPage(voice: voice, theme: theme)
                 case .sound: SoundPage(model: model, theme: theme)
@@ -227,11 +233,11 @@ private struct Sidebar: View {
         VStack(alignment: expanded ? .leading : .center, spacing: expanded ? 4 : 6) {
             header.padding(.top, expanded ? 46 : 38).padding(.bottom, expanded ? 14 : 8)
             item(.home)
-            item(.dictionary)
-            // The menu bar panel's tabs, set apart from Home and Preferences.
+            // Voice typing is the main feature, so it comes right after Home.
+            item(.voice)
             Capsule().fill(Color.white.opacity(0.15)).frame(width: expanded ? nil : 28, height: 2)
                 .padding(.vertical, 6).padding(.horizontal, expanded ? 8 : 0)
-            ForEach([HomeView.Page.sound, .voice, .mouse, .keyboard, .figma, .capture], id: \.self) { item($0) }
+            ForEach([HomeView.Page.sound, .mouse, .keyboard, .figma, .capture, .dictionary], id: \.self) { item($0) }
             Spacer(minLength: 8)
             item(.general)
             Group {

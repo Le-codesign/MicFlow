@@ -92,7 +92,14 @@ Your words are pasted within a second of letting go, and also copied, so you can
 
 ![The Voice page: engine, keys, and Clean-up with your own instructions](Design/Screenshots/voice.png)
 
-**No key yet?** Click **Set it up for me with Google**: a short guide shows the two Google screens you'll see and what to click, then MicFlow creates your free key in your own Google account and saves it. If Google asks you to accept the terms, MicFlow opens the page in the right account and notices by itself when you're done.
+**No key yet?** Home shows two ways to set up voice typing, with what's good and what to keep in mind about each:
+
+1. **Set it up for me with Google**: a short guide shows the Google screens you'll see and what to click, then MicFlow creates your free key in your own Google account and saves it. If Google asks you to accept its terms (one or two pages), MicFlow opens each page in the right account, shows which page you're on, and notices by itself when you're done.
+2. **Create a key yourself and paste it**: MicFlow never asks for access to your Google account.
+
+Either way, the key is saved in your Mac's Keychain only; we can't see it or use it. Every other page shows a reminder with a **Set up** button until voice typing is ready. Prefer no key at all? Model 2 needs none.
+
+![Home's two ways to set up voice typing](Design/Screenshots/home-setup.jpg)
 
 ![The step-by-step guide before signing in with Google](Design/Screenshots/key-guide.jpg)
 

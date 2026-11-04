@@ -217,7 +217,11 @@ final class Account: NSObject, ObservableObject, ASWebAuthenticationPresentation
             URLQueryItem(name: "code_challenge", value: challenge),
             URLQueryItem(name: "code_challenge_method", value: "s256"),
         ]
-        if setUpKey { components.queryItems?.append(URLQueryItem(name: "scopes", value: Self.cloudScope)) }
+        if setUpKey {
+            components.queryItems?.append(URLQueryItem(name: "scopes", value: Self.cloudScope))
+            // Google's account list every time, so "Use another Google account" really can pick another one.
+            components.queryItems?.append(URLQueryItem(name: "prompt", value: "select_account"))
+        }
         isWorking = true
         message = nil
         let web = ASWebAuthenticationSession(url: components.url!, callbackURLScheme: BackendConfig.callbackScheme) { [weak self] url, error in
@@ -308,6 +312,8 @@ enum PreferenceSync {
         row["email"] = user.email
         row["name"] = user.name
         row["updated_at"] = ISO8601DateFormatter().string(from: Date())
+        // Clears a key an older version saved to the account: keys now stay in the Mac's Keychain only.
+        row["api_key"] = NSNull()
         _ = try await Backend.request("POST", "/rest/v1/profiles", json: [row], token: token,
                                       prefer: "resolution=merge-duplicates,return=minimal")
     }
