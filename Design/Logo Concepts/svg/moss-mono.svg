@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs><clipPath id="tile-moss"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath></defs><rect x="100" y="100" width="824" height="824" rx="186" fill="#FFFFFF" stroke="#141414" stroke-width="10"/><g clip-path="url(#tile-moss)">
+<g fill="#141414">
+  <path d="M 390 470 C 300 430 270 330 300 238 C 380 280 430 370 420 470 Z"/>
+  <path d="M 634 470 C 724 430 754 330 724 238 C 644 280 594 370 604 470 Z"/>
+  <rect x="268" y="400" width="488" height="700" rx="244"/>
+</g>
+<circle cx="430" cy="585" r="56" fill="#FFFFFF"/>
+<circle cx="446" cy="572" r="26" fill="#141414"/>
+<path d="M 556 594 Q 606 546 656 594" fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round"/></g></svg>

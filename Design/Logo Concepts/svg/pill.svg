@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs><clipPath id="tile-pill"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath></defs><rect x="100" y="100" width="824" height="824" rx="186" fill="#F4F1EA"/><g clip-path="url(#tile-pill)">
+<ellipse cx="512" cy="690" rx="250" ry="34" fill="#000000" fill-opacity="0.10"/>
+<rect x="196" y="392" width="632" height="250" rx="125" fill="#141414"/>
+<circle cx="560" cy="500" r="44" fill="#C6F432"/>
+<circle cx="680" cy="500" r="44" fill="#C6F432"/></g><rect x="103" y="103" width="818" height="818" rx="183" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="6"/></svg>

@@ -1,0 +1,26 @@
+{
+  "about": {
+    "bio": "Hi, I'm Abdullah. I design products from brief to launch. I'm a Senior UX Designer at Musemind, and before that I led the UX team at Ostad, where the products I designed reached about 950,000 users. I've also built SaaS products on my own, like Mocku, an AI mock interview app.\n\nI made MicFlow for my own work and share it free with friends, family and anyone who finds it useful.\n\nI'm open to feature requests. Tell me what would make MicFlow better for you.",
+    "facebook": "https://www.facebook.com/eabdullahel",
+    "linkedin": "https://www.linkedin.com/in/abdullahell/",
+    "name": "Abdullah Al Mamun",
+    "role": "Senior UX Designer at Musemind",
+    "whatsapp": "8801779053845"
+  },
+  "posts": [
+    {
+      "body": "Test copy",
+      "date": "2026-11-04T07:41:30Z",
+      "id": "91465FF3-D3A2-4E62-9A4B-228B04E249A4",
+      "image": "39b1e30e-image.jpg",
+      "title": "Test"
+    }
+  ],
+  "update": {
+    "autoUpdate": true,
+    "outdatedSubtitle": "This version is too old to keep working well. Please update now.",
+    "outdatedTitle": "Your MicFlow is out of date",
+    "subtitle": "Update to get the latest features and fixes. Your settings stay as they are.",
+    "title": "A new version of MicFlow is ready"
+  }
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs><clipPath id="tile-echo"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath></defs><rect x="100" y="100" width="824" height="824" rx="186" fill="#18181B"/><g clip-path="url(#tile-echo)">
+<g transform="rotate(-10 450 540)">
+  <ellipse cx="440" cy="545" rx="225" ry="248" fill="#F4F1EA"/>
+  <ellipse cx="395" cy="505" rx="24" ry="40" fill="#0C0C0E"/>
+  <ellipse cx="490" cy="497" rx="24" ry="40" fill="#0C0C0E"/>
+</g>
+<g fill="none" stroke="#C6F432" stroke-linecap="round">
+  <path d="M 752 468 A 95 95 0 0 0 752 612" stroke-width="40"/>
+  <path d="M 838 410 A 190 190 0 0 0 838 670" stroke-width="36"/>
+</g></g><rect x="103" y="103" width="818" height="818" rx="183" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="6"/></svg>

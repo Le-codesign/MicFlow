@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs><clipPath id="tile-pointy"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath></defs><rect x="100" y="100" width="824" height="824" rx="186" fill="#12301F"/><g clip-path="url(#tile-pointy)">
+<polygon points="322,206 322,780 462,648 562,872 650,834 552,612 742,612" fill="#C6F432" stroke="#C6F432" stroke-width="56" stroke-linejoin="round"/>
+<circle cx="428" cy="468" r="62" fill="#F4F1EA"/>
+<circle cx="446" cy="460" r="30" fill="#141414"/>
+<path d="M 392 600 Q 440 640 488 596" fill="none" stroke="#141414" stroke-width="22" stroke-linecap="round"/></g><rect x="103" y="103" width="818" height="818" rx="183" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="6"/></svg>

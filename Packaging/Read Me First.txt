@@ -1,0 +1,291 @@
+MICFLOW
+A helper for your Mac. Talk instead of type, take pictures and videos of
+your screen, make your microphone and speakers louder, and make your mouse
+and keyboard nicer to use.
+Works on any Mac (Apple Silicon or Intel) with macOS 13 Ventura or newer.
+
+
+=====================================================================
+ INSTALL  (about 5 minutes, your Mac restarts twice)
+=====================================================================
+
+STEP 1. Install the first sound helper
+   - Double-click "1 Install BlackHole 2ch".
+   - Click Continue, Agree and Install, and type your Mac password.
+   - At the end, click Restart.
+   Why? MicFlow needs a small "hidden cable" inside your Mac to pass your
+   louder voice to apps like Zoom. This installs that cable.
+
+STEP 2. Install the second sound helper
+   - After your Mac restarts, open this download (the .dmg file) again.
+   - Double-click "2 Install BlackHole 16ch" and install it the same way.
+   - At the end, click Restart.
+   Why? This second cable is for making your Mac's own sound louder.
+
+STEP 3. Install MicFlow
+   - Open this download again.
+   - Drag "MicFlow" onto the "Applications" folder next to it.
+
+STEP 4. Open MicFlow the first time (important!)
+   Your Mac protects you from apps it doesn't know yet, so the first time
+   it stops MicFlow. This is normal.
+   - Open your Applications folder and double-click "MicFlow".
+   - When the warning appears, click "Done" (not "Move to Trash").
+   - Open System Settings > Privacy & Security.
+   - Scroll down. Next to "MicFlow was blocked..." click "Open Anyway".
+   - Type your password, then click "Open Anyway" again.
+   You only do this once.
+
+STEP 5. Say yes when MicFlow asks for permission
+   See "WHY MICFLOW ASKS FOR PERMISSION" below.
+
+Done! MicFlow now has an icon in your Dock (the row of apps at the bottom
+of the screen) and a small microphone icon in the menu bar (the strip at
+the very top of the screen, near the clock). It also starts by itself
+when you log in; you can change that in General.
+
+
+=====================================================================
+ WHERE TO FIND EVERYTHING
+=====================================================================
+
+THE HOME WINDOW
+   Open MicFlow like any app: click it in the Dock, in Launchpad, or
+   press Command + Space, type MicFlow and press Return.
+   The left side has a button for each part: Home, Dictionary, Sound,
+   Voice, Mouse, Keyboard, Figma, Capture and General.
+
+THE SMALL MENU BAR PANEL
+   Click the microphone icon at the top of the screen. Same settings,
+   in a small panel.
+
+ON AND OFF
+   Every feature has its own switch. Pink means on.
+
+CLOSING AND QUITTING
+   Closing the window doesn't stop MicFlow; it keeps helping in the
+   background. To stop it completely, choose Quit in the panel, or press
+   Command + Q while the window is open. Your Mac's sound, mouse and
+   keyboard go back to normal.
+
+
+=====================================================================
+ EVERY FEATURE, EXPLAINED SIMPLY
+=====================================================================
+
+--- HOME: your voice typing scoreboard -------------------------------
+
+   Like a step counter, but for your voice.
+   - Words today: how many words you said today.
+   - Calendar: every day you used voice typing turns pink.
+   - Weekly chart: one bar per day; today's bar is yellow.
+   - Average speed: words per minute while speaking. (Most people type
+     about 40 a minute but speak about 150, which is why talking is
+     faster.)
+   - Total words, streak (days in a row) and time saved.
+   - Languages: how much English and how much Bengali you spoke.
+   - Recent dictations: everything you said, as colorful cards. Click a
+     card to copy its words again, or search for something you said.
+   Your history stays only on your Mac.
+
+--- VOICE: talk instead of type --------------------------------------
+
+   1. Click where you want the words: an email, a chat, anywhere.
+   2. HOLD your voice key (at first: the Right Control key).
+   3. TALK normally. A glowing pill with a moving wave appears at the
+      bottom of the screen; your words show above it as you speak.
+   4. LET GO. A moment later your words are typed for you.
+
+   Example: you hold the key and say "Hi Sara, the meeting moved to
+   Thursday." When you let go, that sentence appears in your email.
+
+   - Speak English, Bengali, or both mixed in one sentence.
+   - "Um" and "uh" are removed, and full stops and commas are added.
+   - Your words are also copied, so you can paste them again (Cmd + V).
+   - To change the key: Voice > Keys, click the key's button, then press
+     the key you want.
+
+   FIRST-TIME SETUP: open MicFlow > Voice, turn on Voice typing, and
+   follow the steps on that page.
+
+--- DICTIONARY: teach MicFlow your words -----------------------------
+
+   MY WORDS
+   Names and brands you want spelled your way.
+   Example: add "Figma" once, and it's always written with a capital F.
+
+   MIX-UPS
+   Words that come out wrong because of how you say them.
+   Example: you say "world" but it writes "word". Add "word -> world",
+   and MicFlow fixes it only when the sentence really means "world":
+   "The whole world is watching" is fixed; "spell this word" stays.
+
+--- CAPTURE: pictures and videos of your screen ----------------------
+
+   Each tool has a shortcut: hold Option + Shift + Command and press a
+   number.
+
+   Capture Area (4)      Draw a box; MicFlow saves a picture of it. One
+                         click takes the whole screen. Esc cancels.
+                         Example: saving just one chart from a web page.
+   Previous Area (8)     The same box as last time.
+   Fullscreen (3)        The whole screen.
+   Capture Window (6)    Click a window to capture only that window.
+   Self-Timer (9)        Counts down, then takes a picture. Example: open
+                         a menu first, then let the timer capture it.
+   Capture Text (7)      Draw a box over text, even text in a picture,
+                         and the words are copied for you to paste.
+                         Example: copying a phone number from a photo.
+   Record Screen (5)     A video of a box or the whole screen. Click the
+                         red timer at the top of the screen to stop.
+
+   After each capture, a small preview appears in the bottom-left
+   corner. From there you can:
+   - Mark it up: arrows, boxes, circles, text, numbered dots, or blur
+     private things like a password.
+   - Copy it, copy its text, upload it to your GitHub account and get a
+     link to share, or show it in Finder.
+   Everything is saved in Pictures > MicFlow Captures.
+
+--- SOUND: louder voice, louder speakers -----------------------------
+
+   MICROPHONE BOOST (make your voice louder)
+   Example: on Zoom, people say you're too quiet.
+   - Turn on Microphone and pick the microphone you talk into.
+   - Move "Boost" to the right.
+   - In Zoom, Teams, Discord, Google Meet, FaceTime, etc., choose
+     "BlackHole 2ch" as the microphone. That's your louder voice.
+   - The bar shows how loud you are. Cream or yellow is good; pink means
+     it's at the limit, and MicFlow stops it from crackling.
+
+   SPEAKER BOOST (make your Mac louder)
+   Example: a video is too quiet even at full volume.
+   - Turn on Speakers, pick where you listen, and move "Boost" up.
+   - Your volume keys still work. With headphones, start low!
+
+--- MOUSE: nicer to use ----------------------------------------------
+
+   Tracking speed    The pointer moves faster than macOS's fastest
+                     setting. Good for big screens.
+   Scroll distance   How far a page moves each time you scroll.
+   Smooth scrolling  Pages glide gently instead of jumping.
+   Swipe gestures    (Apple Magic Mouse) Swipe one finger left or right
+                     to move between your desktops (Spaces).
+   Mouse buttons     (A regular mouse with side buttons) Use the side
+                     buttons to move between desktops.
+   Middle click      (Apple Magic Mouse) Press the middle of the mouse.
+                     Example: middle-click a link to open a new tab.
+
+--- KEYBOARD: make keys act differently ------------------------------
+
+   On each row, pick the key you press on the left and what it should
+   do on the right. Example: on a Windows keyboard, make the Windows key
+   act like Command, or make F11 turn the volume down. Click
+   "Add remap" for more rows.
+
+--- FIGMA: zoom with a swipe -----------------------------------------
+
+   In the Figma desktop app, swipe up or down on the mouse to zoom, with
+   no extra key. "Zoom per swipe" sets how much each swipe zooms.
+
+
+=====================================================================
+ WHY MICFLOW ASKS FOR PERMISSION
+=====================================================================
+
+Your Mac keeps you safe by asking before an app can do certain things.
+
+MICROPHONE
+   So MicFlow can hear you for voice typing and the microphone boost.
+
+ACCESSIBILITY
+   So MicFlow can type your words for you and change how your mouse and
+   keyboard behave. Without it, MicFlow hears you but can't put the
+   words in your email.
+   Turn it on in System Settings > Privacy & Security > Accessibility.
+
+SCREEN RECORDING
+   So MicFlow can take pictures and videos of your screen. Without it,
+   screenshots show only the desktop background.
+   Turn it on in System Settings > Privacy & Security > Screen & System
+   Audio Recording, then quit and reopen MicFlow.
+
+
+=====================================================================
+ YOUR PRIVACY
+=====================================================================
+
+- Voice typing sends what you say to a secure cloud speech service to
+  turn it into text. Please don't dictate passwords or very private
+  information. The Voice page explains the details.
+- Everything else stays on your Mac: your history, stats, screenshots,
+  recordings, and text read from pictures.
+- Your keys and passwords for connected services are kept in the Mac's
+  secure Keychain.
+
+
+=====================================================================
+ IF SOMETHING DOESN'T WORK
+=====================================================================
+
+"BlackHole ... isn't installed" in red
+   -> Run Step 1 or Step 2 again, then restart your Mac.
+
+People can't hear your boosted voice on a call
+   -> In the call app's settings, choose "BlackHole 2ch" as the
+      microphone.
+   -> In System Settings > Privacy & Security > Microphone, make sure
+      MicFlow is on.
+
+No sound from the speakers or headphones
+   -> In Sound > Speakers, pick the device you're listening on.
+
+Voice typing hears you but doesn't type
+   -> Turn MicFlow on in System Settings > Privacy & Security >
+      Accessibility. If it's already on, turn it off and on again.
+
+Voice typing shows an error
+   -> Open the Voice page and read the message there; it says what to
+      fix.
+
+A Mouse, Keyboard or Figma feature does nothing
+   -> Check that its switch is on (pink), and read the text under it.
+   -> "No Magic Mouse found": make sure the mouse is on and connected.
+
+Swipe gestures jump two desktops at once
+   -> Another app (like BetterTouchTool) also reacts to the swipe. Turn
+      the same gesture off there.
+
+Screenshots show only the desktop background
+   -> Turn on MicFlow in Screen & System Audio Recording (see above),
+      then quit and reopen MicFlow.
+
+Key remaps don't work
+   -> If Karabiner-Elements is installed, quit or remove it.
+
+The pointer is too fast
+   -> Move Mouse > Tracking speed back to the left, or turn it off.
+
+Bluetooth headphones sound a bit flat
+   -> That's normal while they're also used as the microphone (they
+      switch to "call mode"). It happens with every app.
+
+
+=====================================================================
+ UNINSTALL
+=====================================================================
+
+1. Quit MicFlow (menu bar icon > Quit).
+2. Drag "MicFlow" from Applications to the Trash.
+3. To remove the sound helpers too: in Finder choose Go > Go to Folder,
+   type  /Library/Audio/Plug-Ins/HAL  and drag "BlackHole2ch.driver" and
+   "BlackHole16ch.driver" to the Trash. Then restart your Mac.
+
+
+=====================================================================
+ CREDITS
+=====================================================================
+
+The sound helpers are BlackHole by Existential Audio Inc., free software
+under the GNU General Public License v3.0 (see "BlackHole License.txt").
+Source code: https://github.com/ExistentialAudio/BlackHole

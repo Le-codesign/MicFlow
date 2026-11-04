@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs><clipPath id="tile-iris"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath></defs><rect x="100" y="100" width="824" height="824" rx="186" fill="#FFFFFF" stroke="#141414" stroke-width="10"/><g clip-path="url(#tile-iris)">
+<g transform="rotate(7 512 520)">
+  <rect x="236" y="244" width="552" height="552" rx="196" fill="#141414"/>
+  <circle cx="512" cy="500" r="168" fill="#FFFFFF"/>
+  <circle cx="512" cy="500" r="92" fill="#141414"/>
+  <circle cx="548" cy="462" r="26" fill="#FFFFFF"/>
+  <ellipse cx="672" cy="690" rx="44" ry="26" fill="#FFFFFF"/>
+</g></g></svg>

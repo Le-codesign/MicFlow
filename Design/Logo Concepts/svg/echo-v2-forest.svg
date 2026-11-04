@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+  <linearGradient id="tileFill" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#2F6B44"/><stop offset="1" stop-color="#173B26"/>
+  </linearGradient>
+  <linearGradient id="bodyFill" gradientUnits="userSpaceOnUse" x1="0" y1="300" x2="0" y2="980">
+    <stop offset="0" stop-color="#FBF6E8"/><stop offset="1" stop-color="#BFE3B4"/>
+  </linearGradient>
+  <linearGradient id="waveFill" gradientUnits="userSpaceOnUse" x1="0" y1="360" x2="0" y2="760">
+    <stop offset="0" stop-color="#F4F1EA"/><stop offset="1" stop-color="#BFE3B4"/>
+  </linearGradient>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="186" fill="url(#tileFill)"/>
+<g clip-path="url(#tile)">
+  <!-- The pebble leans toward the sound on its right, and runs off the bottom of the tile. -->
+  <g transform="rotate(6 420 700)">
+    <path d="M 420 328 C 600 328 694 478 694 690 C 694 862 634 1000 420 1000 C 206 1000 146 862 146 690 C 146 478 240 328 420 328 Z"
+          fill="url(#bodyFill)"/>
+    <ellipse cx="362" cy="650" rx="40" ry="70" fill="#173B26"/>
+    <ellipse cx="496" cy="650" rx="40" ry="70" fill="#173B26"/>
+  </g>
+  <!-- Two ripples spreading from a sound off to the right, toward the face: concentric arcs
+       around (980, 575), the nearer one wider. -->
+  <g fill="none" stroke="url(#waveFill)" stroke-linecap="round">
+    <path d="M 816 460 A 200 200 0 0 0 816 690" stroke-width="40"/>
+    <path d="M 882 506 A 120 120 0 0 0 882 644" stroke-width="38"/>
+  </g>
+</g>
+</svg>

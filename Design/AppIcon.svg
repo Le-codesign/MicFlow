@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- MicFlow's app icon: the flame character in the app's green theme. The original artwork is
+       full-bleed; here it sits on the macOS icon grid (an 824 tile with 186 corners, centered),
+       with a soft shadow like other Mac icons. Colors: the forest frame, cream fading to sage,
+       and forest eyes. build.sh turns this into AppIcon.icns. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3A6B4A"/>
+      <stop offset="1" stop-color="#22452E"/>
+    </linearGradient>
+    <linearGradient id="flame" gradientUnits="userSpaceOnUse" x1="512" y1="120" x2="512" y2="1024">
+      <stop offset="0" stop-color="#FFF6DC"/>
+      <stop offset="0.5" stop-color="#F1E6BE"/>
+      <stop offset="1" stop-color="#A9D6A4"/>
+    </linearGradient>
+    <clipPath id="icon">
+      <rect width="1024" height="1024" rx="232" ry="232"/>
+    </clipPath>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <g transform="translate(100 100) scale(0.8046875)">
+      <g clip-path="url(#icon)">
+        <rect width="1024" height="1024" fill="url(#bg)"/>
+        <path fill="url(#flame)" d="M -10 1034 L -10 730
+          C 20 560 120 400 200 314
+          C 232 288 250 380 276 590
+          C 292 400 370 140 545 128
+          C 650 124 715 170 736 490
+          C 748 370 772 292 806 292
+          C 860 296 920 430 1034 610
+          L 1034 1034 Z"/>
+        <ellipse cx="400" cy="796" rx="59" ry="112" fill="#1F4029"/>
+        <ellipse cx="592" cy="800" rx="59" ry="112" fill="#1F4029"/>
+        <!-- A faint light edge, so the tile holds its shape on dark Docks. -->
+        <rect x="3" y="3" width="1018" height="1018" rx="229" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="6"/>
+      </g>
+    </g>
+  </g>
+</svg>
