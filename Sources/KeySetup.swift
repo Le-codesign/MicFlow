@@ -25,6 +25,10 @@ final class KeySetupFlow: ObservableObject {
     @Published private(set) var isChecking = false
     /// Checking by itself every few seconds (stops after 15 minutes).
     @Published private(set) var isWatching = false
+    /// Which of Google's terms the account still has to accept (Google names it each time).
+    @Published private(set) var termsID: String?
+    /// How many terms pages were accepted while waiting (Google can ask for two in a row).
+    @Published private(set) var acceptedTerms = 0
 
     /// Set by the app.
     var signIn: () -> Void = {}
@@ -54,7 +58,8 @@ final class KeySetupFlow: ObservableObject {
     /// Admin QA: `MICFLOW_PREVIEW_KEYSETUP=terms|tick` shows that state without signing in.
     func previewIfAsked() {
         switch ProcessInfo.processInfo.environment["MICFLOW_PREVIEW_KEYSETUP"] {
-        case "terms": email = "someone@gmail.com"; stage = .needsTerms
+        case "terms": email = "someone@gmail.com"; termsID = "universal"; stage = .needsTerms
+        case "terms2": email = "someone@gmail.com"; termsID = "generative-language-api"; acceptedTerms = 1; stage = .needsTerms
         case "tick": stage = .missingPermission
         default: break
         }
@@ -85,6 +90,8 @@ final class KeySetupFlow: ObservableObject {
         self.token = token
         tokenExpires = Date().addingTimeInterval(50 * 60)
         project = nil
+        termsID = nil
+        acceptedTerms = 0
         Task { await firstRun() }
     }
 
@@ -131,6 +138,9 @@ final class KeySetupFlow: ObservableObject {
         } catch let failure as KeyProvisioner.Failure where failure.needsTerms {
             project = failure.project ?? project
             termsURL = failure.fixURL ?? KeyProvisioner.termsPage
+            let id = failure.termsID ?? "cloud"
+            if stage == .needsTerms, let previous = termsID, previous != id { acceptedTerms += 1 }
+            termsID = id
             if stage != .needsTerms { stage = .needsTerms; startWatching() }
             return true
         } catch where stage == .needsTerms && error is URLError {
@@ -242,8 +252,8 @@ struct GoogleKeyGuide: View {
                               title: "Tick this box. This is the important one",
                               detail: "It lets MicFlow create the key in your Google account. Without the tick, setup can't finish. Then click Continue at the bottom.")
                     GuideStep(number: 3, image: "Guide-Accept",
-                              title: "If Google asks, accept the terms (one click)",
-                              detail: "Only the first time. MicFlow opens the page in the same Google account and notices by itself once you've clicked Accept.")
+                              title: "If Google asks, accept its terms (one click per page)",
+                              detail: "Only the first time, and sometimes two pages in a row. MicFlow opens each page in the same Google account and notices by itself once you've clicked Accept.")
                 }
                 .padding(.horizontal, 24).padding(.bottom, 8)
             }
@@ -348,9 +358,20 @@ struct KeySetupStatus: View {
 private struct TermsPanel: View {
     @ObservedObject var flow: KeySetupFlow
 
+    /// What Google calls the terms it's asking for.
+    private var termsName: String {
+        switch flow.termsID {
+        case "universal": return "the Google APIs Terms of Service"
+        case "cloud": return "the Google Cloud Terms of Service"
+        default: return "the terms for the voice model's API"
+        }
+    }
+
     var body: some View {
-        InfoPanel(icon: "doc.text.magnifyingglass", title: "One more click: accept the terms",
-                  detail: "Google needs your account to accept the voice model's terms once. Open the page, click Accept, and come back. MicFlow notices by itself.") {
+        InfoPanel(icon: "doc.text.magnifyingglass",
+                  title: flow.acceptedTerms > 0 ? "Done. Google needs one more page accepted" : "One more click: accept the terms",
+                  detail: (flow.acceptedTerms > 0 ? "Thanks, that one worked. " : "")
+                    + "Google needs your account to accept \(termsName) once. Open the page, click Accept, and come back. MicFlow notices by itself.") {
             GuideImage(name: "Guide-Accept", maxHeight: 150)
             HStack(spacing: 10) {
                 PillButton(title: "Open the terms page", systemImage: "arrow.up.right", style: .ink, action: flow.openTerms)

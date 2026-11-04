@@ -437,7 +437,11 @@ final class BoostModel: ObservableObject {
         account.wantsKeySetup = { [weak self] in !(self?.voiceTyping.hasKey ?? true) }
         account.onGoogleToken = { [weak self] token in self?.account.keySetup.received(token: token) }
         account.keySetup.signIn = { [weak self] in self?.account.signIn(setUpKey: true) }
-        account.keySetup.save = { [weak self] key in await self?.voiceTyping.saveKeyChecked(key) ?? "MicFlow closed" }
+        account.keySetup.save = { [weak self] key in
+            // nil means the key works and is saved.
+            guard let self else { return "MicFlow closed" }
+            return await self.voiceTyping.saveKeyChecked(key)
+        }
         account.keySetup.afterSave = { [weak self] in self?.syncPreferences(loadFirst: false) }
         account.keySetup.fallbackEmail = { [weak self] in self?.account.user?.email }
         account.keySetup.hasKey = { [weak self] in self?.voiceTyping.hasKey ?? false }

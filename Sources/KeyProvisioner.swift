@@ -14,10 +14,13 @@ enum KeyProvisioner {
         var needsTerms = false
         /// The project that was being set up, so a retry goes straight back to it.
         var project: String?
-        init(_ message: String, fix: URL? = nil, needsTerms: Bool = false) {
+        /// Which of Google's terms are missing (e.g. "universal" or "generative-language-api").
+        var termsID: String?
+        init(_ message: String, fix: URL? = nil, needsTerms: Bool = false, termsID: String? = nil) {
             errorDescription = message
             fixURL = fix
             self.needsTerms = needsTerms
+            self.termsID = termsID
         }
     }
 
@@ -57,7 +60,27 @@ enum KeyProvisioner {
     private static let service = "generativelanguage.googleapis.com"
 
     /// Google's page where an account accepts the model API's own terms (once).
-    static let termsPage = URL(string: "https://console.cloud.google.com/terms/generative-language-api")!
+    static let termsPage = terms("generative-language-api")
+
+    /// The Cloud page for one set of Google's terms. Google can ask for more than one, one after
+    /// another: "universal" (Google APIs terms, for accounts new to Google Cloud) and the model's own.
+    static func terms(_ id: String) -> URL {
+        let safe = id.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        return URL(string: "https://console.cloud.google.com/terms/\(safe.isEmpty ? "generative-language-api" : safe)")!
+    }
+
+    /// The terms Google names in its answer ("…?error_code=390003&tos_id=universal&services=…").
+    private static func missingTerms(_ error: [String: Any]?) -> String? {
+        for detail in (error?["details"] as? [[String: Any]]) ?? [] {
+            for violation in (detail["violations"] as? [[String: Any]]) ?? [] {
+                guard let subject = violation["subject"] as? String,
+                      let items = URLComponents(string: "https://x/" + subject)?.queryItems,
+                      let id = items.first(where: { $0.name == "tos_id" })?.value, !id.isEmpty else { continue }
+                return id
+            }
+        }
+        return nil
+    }
 
     /// With `project` (from an earlier try that stopped at the terms), only that project is tried
     /// again: one or two requests instead of looking through every project.
@@ -187,7 +210,8 @@ enum KeyProvisioner {
             voiceLog.info("Key setup: \(method, privacy: .public) \(path, privacy: .public) -> HTTP \(status): \(String(data: data, encoding: .utf8)?.prefix(1500) ?? "", privacy: .public)")
             let reasons = ((error?["details"] as? [[String: Any]]) ?? []).compactMap { $0["reason"] as? String }
             if reasons.contains("UREQ_TOS_NOT_ACCEPTED") || message.contains("generative-language-api") {
-                throw Failure("One more click: accept the voice model's terms on Google's page.", fix: termsPage, needsTerms: true)
+                let id = missingTerms(error) ?? "generative-language-api"
+                throw Failure("One more click: accept Google's terms on Google's page.", fix: terms(id), needsTerms: true, termsID: id)
             }
             if message.lowercased().contains("terms of service"), path.contains("cloudresourcemanager") {
                 throw Failure("One more click: accept Google Cloud's terms.", fix: URL(string: "https://console.cloud.google.com/"),
