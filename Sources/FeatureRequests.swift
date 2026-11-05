@@ -17,8 +17,56 @@ struct FeatureRequest: Codable, Identifiable, Equatable {
     var upvotes: Int
     var downvotes: Int
     var comments: Int
+    /// "mac", "android" or "windows"; requests from before tags were all made on a Mac.
+    var platform: String?
 
     var score: Int { upvotes - downvotes }
+    var requestPlatform: RequestPlatform { RequestPlatform(rawValue: platform ?? "mac") ?? .mac }
+}
+
+/// Which app a feature request is for. Posting picks this app's platform; the list shows this
+/// platform's requests first (or everything, while it has none).
+enum RequestPlatform: String, CaseIterable, Identifiable {
+    case mac, android, windows
+    var id: String { rawValue }
+    /// The platform of the app you're using.
+    static let current = RequestPlatform.mac
+
+    var title: String {
+        switch self {
+        case .mac: return "Mac"
+        case .android: return "Android"
+        case .windows: return "Windows"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .mac: return "laptopcomputer"
+        case .android: return "iphone"
+        case .windows: return "pc"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .mac: return Palette.lavender
+        case .android: return Palette.mintText
+        case .windows: return Color(hex: 0x3B82F6)
+        }
+    }
+}
+
+/// The small platform tag on a request.
+struct PlatformTag: View {
+    let platform: RequestPlatform
+
+    var body: some View {
+        Label(platform.title, systemImage: platform.systemImage)
+            .font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(platform.color, in: Capsule())
+    }
 }
 
 struct RequestComment: Codable, Identifiable, Equatable {
@@ -49,17 +97,19 @@ final class FeatureRequestStore: ObservableObject {
         Task {
             defer { isLoading = false }
             do {
+                // The list is public: it loads at once, without waiting for your sign-in (which can
+                // wait on a Keychain question from macOS).
                 let data = try await Backend.request("GET", "/rest/v1/feature_request_list", query: [
                     URLQueryItem(name: "select", value: "*"),
                     URLQueryItem(name: "order", value: "score.desc,created_at.desc"),
                     URLQueryItem(name: "limit", value: "200"),
-                ], token: try? await account.token())
+                ], token: nil)
                 var list = try Backend.decoder().decode([FeatureRequest].self, from: data)
                 // Who posted each one, straight from the requests (in case the list doesn't say).
                 if list.contains(where: { $0.author_id == nil }),
                    let authors = try? await Backend.request("GET", "/rest/v1/feature_requests", query: [
                        URLQueryItem(name: "select", value: "id,author_id"),
-                   ], token: try? await account.token()),
+                   ], token: nil),
                    let rows = try? JSONSerialization.jsonObject(with: authors) as? [[String: Any]] {
                     let byID = Dictionary(rows.compactMap { row in
                         (row["id"] as? String).map { ($0, row["author_id"] as? String) }
@@ -205,7 +255,10 @@ final class FeatureRequestStore: ObservableObject {
     }
 
     /// Uploads the pictures, then posts the request.
-    func post(title: String, body: String, images: [Data]) async -> Bool {
+    /// Whether the database knows about platforms yet (Backend/migration-2.7.sql).
+    private var hasPlatformColumn = true
+
+    func post(title: String, body: String, images: [Data], platform: RequestPlatform = .current) async -> Bool {
         guard account.isSignedIn else { return false }
         do {
             guard let token = try await account.token(), let user = account.user else { return false }
@@ -216,10 +269,19 @@ final class FeatureRequestStore: ObservableObject {
                                               contentType: "image/jpeg", token: token)
                 paths.append("feature-images/\(path)")
             }
-            _ = try await Backend.request("POST", "/rest/v1/feature_requests", json: [[
+            var row: [String: Any] = [
                 "title": title, "body": body, "images": paths, "author_id": user.id,
                 "author_name": user.name ?? "MicFlow user", "author_avatar": user.avatar ?? "",
-            ]], token: token, prefer: "return=minimal")
+            ]
+            if hasPlatformColumn { row["platform"] = platform.rawValue }
+            do {
+                _ = try await Backend.request("POST", "/rest/v1/feature_requests", json: [row], token: token, prefer: "return=minimal")
+            } catch let error as BackendError where (error.errorDescription ?? "").contains("platform") {
+                // An older database without platforms: post without the tag.
+                hasPlatformColumn = false
+                row.removeValue(forKey: "platform")
+                _ = try await Backend.request("POST", "/rest/v1/feature_requests", json: [row], token: token, prefer: "return=minimal")
+            }
             refresh()
             return true
         } catch {
@@ -237,6 +299,8 @@ struct FeatureRequestsPage: View {
     @ObservedObject var account: Account
     let theme: HomeTheme
     @State private var showAll = false
+    /// Which platform's requests to show; nil shows every request.
+    @State private var filter: RequestPlatform?? = .none
     @State private var open: FeatureRequest?
     @State private var composing = false
     @State private var toDelete: FeatureRequest?
@@ -263,17 +327,19 @@ struct FeatureRequestsPage: View {
                 }
                 if let error = store.error { Note(text: error, isError: true) }
                 WhitePanel {
+                    PlatformFilter(requests: store.requests, selected: shownPlatform) { filter = .some($0) }
                     HStack(alignment: .firstTextBaseline) {
                         Text(showAll ? "All requests" : "Most wanted").font(.display(24))
                         Text("by votes").font(.system(size: 12)).foregroundStyle(Palette.greyOnLight)
                         Spacer()
                         if store.isLoading { ProgressView().controlSize(.small) }
                     }
-                    if store.requests.isEmpty, !store.isLoading {
-                        Text("No requests yet. Be the first to ask for something!").font(.system(size: 13))
+                    if shown.isEmpty, !store.isLoading || !store.requests.isEmpty {
+                        Text(shownPlatform == nil ? "No requests yet. Be the first to ask for something!"
+                             : "No \(shownPlatform!.title) requests yet.").font(.system(size: 13))
                             .foregroundStyle(Palette.greyOnLight)
                     }
-                    ForEach(showAll ? store.requests : Array(store.requests.prefix(5))) { request in
+                    ForEach(showAll ? shown : Array(shown.prefix(5))) { request in
                         RequestRow(request: request, myVote: store.myVotes[request.id],
                                    canDelete: store.canDelete(authorID: request.author_id),
                                    delete: { toDelete = request }) { store.vote(request, $0) } open: {
@@ -281,8 +347,8 @@ struct FeatureRequestsPage: View {
                             store.loadComments(request)
                         }
                     }
-                    if store.requests.count > 5 {
-                        PillButton(title: showAll ? "Show the top 5" : "See \(store.requests.count - 5) more requests",
+                    if shown.count > 5 {
+                        PillButton(title: showAll ? "Show the top 5" : "See \(shown.count - 5) more requests",
                                    systemImage: showAll ? "chevron.up" : "chevron.down", style: .ink) { showAll.toggle() }
                     }
                 }
@@ -303,6 +369,36 @@ struct FeatureRequestsPage: View {
             .onAppear { if store.requests.isEmpty { store.refresh() } }
         }
     }
+
+    /// Your own platform's requests at first; every request while your platform has none yet.
+    private var shownPlatform: RequestPlatform? {
+        if case .some(let chosen) = filter { return chosen }
+        return store.requests.contains { $0.requestPlatform == .current } ? .current : nil
+    }
+
+    private var shown: [FeatureRequest] {
+        guard let platform = shownPlatform else { return store.requests }
+        return store.requests.filter { $0.requestPlatform == platform }
+    }
+}
+
+/// The platform tabs over the list: each platform with its count, and All.
+private struct PlatformFilter: View {
+    let requests: [FeatureRequest]
+    let selected: RequestPlatform?
+    let select: (RequestPlatform?) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(RequestPlatform.allCases) { platform in
+                Pill(title: "\(platform.title) · \(requests.filter { $0.requestPlatform == platform }.count)",
+                     selected: selected == platform, onDark: false) { select(platform) }
+            }
+            Pill(title: "All · \(requests.count)", selected: selected == nil, onDark: false) { select(nil) }
+        }
+        .padding(3)
+        .background(Color(hex: 0xF2F2F0), in: Capsule())
+    }
 }
 
 private struct RequestRow: View {
@@ -322,6 +418,7 @@ private struct RequestRow: View {
                     Text(request.body).font(.system(size: 12)).foregroundStyle(Palette.greyOnLight).lineLimit(2)
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 10) {
+                        PlatformTag(platform: request.requestPlatform)
                         Label("\(request.comments)", systemImage: "bubble.left")
                         if !request.images.isEmpty { Label("\(request.images.count)", systemImage: "photo") }
                         Text(request.author_name ?? "")
@@ -430,6 +527,8 @@ private struct RequestDetail: View {
                         Text(request.created_at.formatted(date: .abbreviated, time: .shortened))
                             .font(.system(size: 11)).foregroundStyle(Palette.greyOnLight)
                     }
+                    Spacer()
+                    PlatformTag(platform: request.requestPlatform)
                 }
                 Text(request.title).font(.display(30))
                 Text(request.body).font(.system(size: 14)).lineSpacing(3).textSelection(.enabled)
@@ -522,10 +621,20 @@ private struct ComposeRequest: View {
     @State private var text = ""
     @State private var images: [Data] = []
     @State private var posting = false
+    @State private var platform = RequestPlatform.current
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Request a feature").font(.title2.bold())
+            HStack {
+                Text("Request a feature").font(.title2.bold())
+                Spacer()
+                Picker("For", selection: $platform) {
+                    ForEach(RequestPlatform.allCases) { Label($0.title, systemImage: $0.systemImage).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+                .help("Which MicFlow app this idea is for")
+            }
             TextField("Headline, e.g. \"Dictate in Hindi too\"", text: $title).textFieldStyle(.roundedBorder).font(.title3)
             Text("Details").font(.headline)
             TextEditor(text: $text).font(.body).frame(minHeight: 160)
@@ -556,7 +665,7 @@ private struct ComposeRequest: View {
                 Button(posting ? "Posting…" : "Post") {
                     posting = true
                     Task {
-                        if await store.post(title: title.trimmingCharacters(in: .whitespaces), body: text, images: images) { dismiss() }
+                        if await store.post(title: title.trimmingCharacters(in: .whitespaces), body: text, images: images, platform: platform) { dismiss() }
                         posting = false
                     }
                 }
