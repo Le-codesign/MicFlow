@@ -61,6 +61,7 @@ struct GeneralPage: View {
                 }
             } right: {
                 AccountCard(account: model.account, theme: theme)
+                ClipboardCard(clipboard: model.clipboard, account: model.account, theme: theme)
                 FeatureCard(theme: theme, systemImage: "lock.shield.fill", title: "Privacy", subtitle: "What stays on this Mac") {
                     Note(text: "Your dictation history, stats and captures stay on this Mac. Your API keys are kept in the Keychain; if you sign in, your preferences and API key are also saved to your account.")
                 }
@@ -463,5 +464,35 @@ enum PostsHTML {
             last = r.upperBound
         }
         return result + text[last...]
+    }
+}
+
+/// Universal Clipboard: on/off, this Mac's pairing code, and entering another device's code.
+struct ClipboardCard: View {
+    @ObservedObject var clipboard: UniversalClipboard
+    @ObservedObject var account: Account
+    let theme: HomeTheme
+    @State private var entered = ""
+    @State private var wrongCode = false
+
+    var body: some View {
+        FeatureCard(theme: theme, systemImage: "doc.on.clipboard.fill", title: "Universal Clipboard",
+                    subtitle: "Copy here, paste on your phone", isOn: $clipboard.enabled) {
+            if !account.isSignedIn {
+                Note(text: "Sign in with Google to share your clipboard with MicFlow on your phone.")
+            } else if let code = clipboard.code {
+                Note(text: "Text and images you copy go to your other devices, end-to-end encrypted. To link a device, enter this code in its MicFlow:")
+                Text(code).font(.system(size: 17, weight: .bold, design: .monospaced)).textSelection(.enabled)
+                HStack {
+                    TextField("Or enter the code from your phone", text: $entered).textFieldStyle(.roundedBorder)
+                    PillButton(title: "Link", systemImage: "link") {
+                        wrongCode = !clipboard.useCode(entered)
+                        if !wrongCode { entered = "" }
+                    }
+                }
+                if wrongCode { Note(text: "That isn't a valid code: it has 16 letters and numbers.", isError: true) }
+                if !clipboard.status.isEmpty { Note(text: clipboard.status) }
+            }
+        }
     }
 }

@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MicFlowNotifier.shared.setUp()
+        model.clipboard.start()
         MicFlowNotifier.shared.update = { [model] in
             // One click: install the new version (checking first if it isn't known yet).
             if case .available = model.updater.state { model.updater.install() } else { model.updater.check() }

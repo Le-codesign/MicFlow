@@ -168,6 +168,12 @@ The same settings in a small panel from the microphone icon at the top of the sc
 
 ---
 
+### Universal Clipboard
+
+Copy text or an image on your Mac and paste it on your phone, and the other way round, with [MicFlow for Android](https://github.com/abdulllahel/MicFlow-Android). Items are end-to-end encrypted with a code only your devices know, and kept on the server only while they're delivered. Link a device once in **Settings › General › Universal Clipboard**.
+
+![Universal Clipboard](Design/Screenshots/universal-clipboard.jpg)
+
 ## Why MicFlow asks for permission
 
 Your Mac keeps you safe by asking before an app can do certain things. MicFlow only asks for what each feature needs:

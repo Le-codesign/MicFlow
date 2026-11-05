@@ -316,6 +316,8 @@ final class BoostModel: ObservableObject {
     /// The optional Google account: preferences, API key and feature requests.
     let account = Account()
     lazy var featureRequests = FeatureRequestStore(account: account)
+    /// Copy on one device, paste on your others.
+    lazy var clipboard = UniversalClipboard(account: account)
     private var contentWatch: AnyCancellable?
     private var accountWatch: AnyCancellable?
     private var contentTimer: Timer?
