@@ -21,89 +21,116 @@ extension VoiceTypingModel {
     }
 }
 
-/// Home, until voice typing has a key: the same parts as every other page (the yellow hero, then
-/// dark feature cards), with the two ways to get a key side by side and what's good and what to
-/// keep in mind about each.
-struct HomeKeySetup: View {
-    @ObservedObject var voice: VoiceTypingModel
-    @ObservedObject var account: Account
-    let theme: HomeTheme
+extension Account {
+    /// The Voice Typing tab shows only while signed in (always, in a build without accounts).
+    var showsVoiceTab: Bool { !isConfigured || signedInForVoice }
 
-    var body: some View {
-        PageBody {
-            HeroCard(kicker: "Get started",
-                     title: voice.keyRefused ? "Your key needs replacing" : "Set up voice typing in about a minute",
-                     detail: voice.keyRefused
-                        ? "Google turned off the free plan for the Google account your saved key was made in, so it refuses every request. Make a new key below with a Google account you've used for a while."
-                        : "Voice typing needs a free key for its voice model. Pick one of the two ways below; you only do this once.",
-                     chip: voice.keyRefused ? "Key refused" : "Not set up yet", systemImage: "waveform") {
-                if account.isConfigured {
-                    PillButton(title: "See the steps first", systemImage: "list.number", style: .ink) { account.keySetup.showGuide = true }
-                }
-            }
-            CardColumns {
-                if account.isConfigured {
-                    FeatureCard(theme: theme, systemImage: "sparkles", title: "Set it up for me with Google",
-                                subtitle: "Way 1 · Easiest") {
-                        ProsCons(good: "No copying or pasting. MicFlow creates a free key in your own Google account and saves it for you.",
-                                 mind: "Google asks for Google Cloud access and shows a warning screen first, because its review of MicFlow isn't finished. You also accept Google's terms once: one or two pages.")
-                        PillButton(title: account.isWorking ? "Waiting for Google…" : "Set it up for me", systemImage: "sparkles",
-                                   style: .orange, action: account.keySetup.begin)
-                        KeySetupStatus(flow: account.keySetup)
-                    }
-                } else {
-                    pasteCard
-                }
-                safeCard
-            } right: {
-                if account.isConfigured { pasteCard }
-            }
-        }
-    }
-
-    private var safeCard: some View {
-        FeatureCard(theme: theme, systemImage: "lock.shield.fill", title: "Safe in your Keychain",
-                    subtitle: "Whichever way you pick") {
-            Note(text: "Your key is saved in your Mac's Keychain. It's only used from this Mac to talk to the voice model; we can't see your key or use it.")
-            Note(text: "Use a Google account you've had for a while: Google may not give brand-new accounts the free plan, and no app can change that.")
-            HStack(spacing: 10) {
-                Text("Rather not use a key?").font(.system(size: 12)).foregroundStyle(Palette.greyOnDark)
-                PillButton(title: "Use Model 2", systemImage: "waveform", style: .outline) { voice.engine = .chrome }
-            }
-        }
-    }
-
-    private var pasteCard: some View {
-        FeatureCard(theme: theme, systemImage: "key.fill", title: "Create a key yourself and paste it",
-                    subtitle: account.isConfigured ? "Way 2 · Most private" : "Takes about two minutes") {
-            ProsCons(good: "MicFlow never asks for access to your Google account. You make the key and stay in control of it.",
-                     mind: "A few more steps: open the key page, sign in, click Create API key, copy the key and paste it here.")
-            PasteKey(voice: voice)
-        }
+    /// Signed in with Google, which voice typing (both models) needs.
+    var signedInForVoice: Bool {
+        #if ADMIN
+        // Admin QA: MICFLOW_PREVIEW_SIGNEDOUT=1 shows the signed-out Home without signing out.
+        if ProcessInfo.processInfo.environment["MICFLOW_PREVIEW_SIGNEDOUT"] != nil { return false }
+        #endif
+        return isSignedIn
     }
 }
 
-/// What's good (mint) and what to keep in mind (orange), one line each.
-private struct ProsCons: View {
-    let good: String
-    let mind: String
+/// Whether Home shows the setup instead of the dashboard: not signed in yet, or Model 1 without a
+/// working key.
+@MainActor
+func voiceNeedsSetup(_ voice: VoiceTypingModel, _ account: Account) -> Bool {
+    (account.isConfigured && !account.signedInForVoice) || voice.needsKeySetup
+}
+
+/// Home until voice typing is ready. Signed out: a heading, one line, and Google's own big
+/// "Sign in with Google" button, which also makes the key. Progress and any problem show right
+/// under it; pasting your own key only appears once Google wouldn't make one.
+struct HomeKeySetup: View {
+    @ObservedObject var voice: VoiceTypingModel
+    @ObservedObject var account: Account
+    @ObservedObject var flow: KeySetupFlow
+    let theme: HomeTheme
+
+    init(voice: VoiceTypingModel, account: Account, theme: HomeTheme) {
+        self.voice = voice
+        self.account = account
+        self.flow = account.keySetup
+        self.theme = theme
+    }
+
+    private var signedIn: Bool { account.signedInForVoice }
+    private var showPaste: Bool { signedIn && (flow.hasFailed || voice.keyRefused) }
+    private var showButton: Bool { flow.stage == .idle || flow.hasFailed }
+
+    /// Nothing under the yellow card yet: it fills the page, its content centred.
+    private var alone: Bool { flow.stage == .idle && !showPaste }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            row("hand.thumbsup.fill", Palette.mintText, "Good", good)
-            row("exclamationmark", Palette.orange, "Keep in mind", mind)
+        GeometryReader { geometry in
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 14) {
+                VStack(spacing: 18) {
+                    PageSticker(systemImage: "waveform").padding(.bottom, 4)
+                    Text(title).font(.display(40)).multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(detail).font(.system(size: 15, weight: .medium)).multilineTextAlignment(.center)
+                        .foregroundStyle(Palette.ink.opacity(0.75)).frame(maxWidth: 560)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if showButton {
+                        GoogleSignInButton(title: signedIn ? "Continue with Google" : "Sign in with Google", size: .large,
+                                           isWorking: account.isWorking, action: start)
+                            .padding(.top, 6)
+                    }
+                    if let message = account.message, flow.stage == .idle {
+                        Text(message).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(Color.white.opacity(0.6), in: Capsule())
+                    }
+                }
+                .foregroundStyle(Palette.ink)
+                .padding(.horizontal, 40).padding(.vertical, 40)
+                .frame(maxWidth: .infinity, minHeight: alone ? geometry.size.height - 4 : nil)
+                .background(Palette.yellow, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+
+                if flow.stage != .idle {
+                    DarkCard(theme: theme) {
+                        KeySetupStatus(flow: flow)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                if showPaste {
+                    FeatureCard(theme: theme, systemImage: "key.fill", title: "Or paste your own key",
+                                subtitle: "You're signed in; only the key is missing") {
+                        PasteKey(voice: voice)
+                        Note(text: "Your key is kept in your Mac's Keychain, and your account keeps a locked (encrypted) copy that only MicFlow, signed in as you, can open.")
+                    }
+                }
+            }
+            .padding(.bottom, 4)
+        }
         }
     }
 
-    private func row(_ icon: String, _ color: Color, _ label: String, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Circle().fill(color).frame(width: 22, height: 22)
-                .overlay(Image(systemName: icon).font(.system(size: 10, weight: .heavy)).foregroundStyle(Palette.white))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.greyOnDark)
-                Text(text).font(.system(size: 12.5)).foregroundStyle(Palette.white.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+    private var title: String {
+        if voice.keyRefused { return "Your key needs replacing" }
+        return signedIn ? "One more step: your voice key" : "Login with Google to start using voice typing"
+    }
+
+    private var detail: String {
+        if voice.keyRefused {
+            return "Google stopped accepting the key from your Google account. Set it up again, maybe with a Google account you use regularly, or paste your own key."
+        }
+        return signedIn ? "You're signed in. Let MicFlow make your free voice key with Google; it takes about a minute."
+            : "Logging in turns on voice typing and saves all your preferences, instructions and settings to your account. Your API key is made for you automatically, so you don't have to create one."
+    }
+
+    private func start() {
+        // A working key already on this Mac, or Model 2 (no key): a plain sign-in is enough,
+        // without the Google Cloud permission.
+        if !signedIn, !voice.needsKeySetup {
+            account.signIn(setUpKey: false)
+        } else {
+            flow.begin()
         }
     }
 }
@@ -162,26 +189,27 @@ private struct PasteKey: View {
     }
 }
 
-/// On every page but Home while voice typing has no key: one line and a button back to Home, where
-/// the two ways to set it up are.
+/// On every page but Home until voice typing is ready: one line and a button back to Home.
 struct VoiceSetupBanner: View {
     @ObservedObject var voice: VoiceTypingModel
+    @ObservedObject var account: Account
     let openHome: () -> Void
 
     var body: some View {
-        if voice.needsKeySetup {
+        if voiceNeedsSetup(voice, account) {
             HStack(spacing: 14) {
                 Image(systemName: "waveform")
                     .font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.white)
                     .frame(width: 38, height: 38).background(Palette.pink, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Set up your voice model").font(.system(size: 15, weight: .bold))
-                    Text(voice.keyRefused ? "Your saved key can't be used any more. Set up a new one on Home: it takes about a minute."
-                         : "Voice typing needs a key first: sign in with Google, or paste a key you made. It takes about a minute.")
+                    Text(account.signedInForVoice ? "Finish setting up voice typing" : "Sign in to use voice typing").font(.system(size: 15, weight: .bold))
+                    Text(voice.keyRefused ? "Google stopped accepting your key. Set it up again on Home."
+                         : account.signedInForVoice ? "One more step on Home: MicFlow makes your free voice key (about a minute)."
+                         : "Sign in with Google on Home: MicFlow sets everything up and saves your settings to your account.")
                         .font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.7))
                 }
                 Spacer()
-                PillButton(title: "Set up", systemImage: "arrow.right", style: .ink, action: openHome)
+                PillButton(title: account.signedInForVoice ? "Set up" : "Sign in", systemImage: "arrow.right", style: .ink, action: openHome)
             }
             .foregroundStyle(Palette.ink)
             .padding(.horizontal, 16).padding(.vertical, 12)

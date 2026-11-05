@@ -197,7 +197,6 @@ final class Account: NSObject, ObservableObject, ASWebAuthenticationPresentation
     /// Whether sign-in should also make an API key (set by the app: when there's no key yet).
     var wantsKeySetup: () -> Bool = { false }
     /// Gets Google's access token when sign-in asked for the key permission (nil: none came back).
-    var onGoogleToken: ((String?) -> Void)?
     /// Making the key: the guide, progress, the terms step.
     let keySetup = KeySetupFlow()
 
@@ -228,22 +227,24 @@ final class Account: NSObject, ObservableObject, ASWebAuthenticationPresentation
             Task { @MainActor in
                 guard let self else { return }
                 defer { self.isWorking = false; self.webSession = nil }
-                guard let url, error == nil,
-                      let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "code" })?.value else {
-                    if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin { return }
-                    self.message = "Sign-in didn't finish. Try again."
+                let items = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems } ?? []
+                guard let url, error == nil, let code = items.first(where: { $0.name == "code" })?.value else {
+                    if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+                        self.message = "You closed Google's sign-in before it finished. Click Sign in with Google to try again."
+                    } else if items.first(where: { $0.name == "error" })?.value == "access_denied" {
+                        self.message = "Sign-in stopped on Google's screen. Try again: click Advanced, then \"Go to … (unsafe)\", tick the box and click Continue."
+                    } else {
+                        self.message = "Sign-in didn't finish (\(url == nil ? "no answer from Google" : "Google sent no sign-in code")). Check your internet connection and try again."
+                    }
                     return
                 }
                 do {
                     let data = try await Backend.request("POST", "/auth/v1/token", query: [URLQueryItem(name: "grant_type", value: "pkce")],
                                                          json: ["auth_code": code, "code_verifier": verifier], token: nil)
                     self.session = try Self.session(from: data)
-                    self.onSignedIn?()
-                    if setUpKey {
-                        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-                        let googleToken = (json?["provider_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                        self.onGoogleToken?(googleToken)
-                    }
+                    let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                    let googleToken = (json?["provider_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    self.onSignedIn?(setUpKey ? googleToken : nil, setUpKey)
                 } catch {
                     self.message = error.localizedDescription
                 }
@@ -255,10 +256,15 @@ final class Account: NSObject, ObservableObject, ASWebAuthenticationPresentation
         web.start()
     }
 
-    /// Called after a Google sign-in, to load and merge your saved preferences.
-    var onSignedIn: (() -> Void)?
+    /// Called after a Google sign-in: Google's access token (when key setup was asked for) and
+    /// whether it was.
+    var onSignedIn: ((String?, Bool) -> Void)?
+
+    /// Called after signing out (so the next sign-in saves everything again).
+    var onSignedOut: (() -> Void)?
 
     func signOut() {
+        defer { onSignedOut?() }
         let token = session?.accessToken
         session = nil
         if let token { Task { _ = try? await Backend.request("POST", "/auth/v1/logout", token: token) } }
@@ -296,25 +302,64 @@ struct SavedPreferences: Codable {
 
 @MainActor
 enum PreferenceSync {
-    static func load(_ account: Account) async throws -> SavedPreferences? {
-        guard account.isSignedIn, let token = try await account.token(), let id = account.user?.id else { return nil }
-        let data = try await Backend.request("GET", "/rest/v1/profiles", query: [
-            URLQueryItem(name: "id", value: "eq.\(id)"),
-            URLQueryItem(name: "select", value: "instructions,instructions_enabled,my_words,mix_ups,api_key"),
-        ], token: token)
-        return try JSONDecoder().decode([SavedPreferences].self, from: data).first
+    /// What the account has: preferences, the key (already unlocked) and every other setting.
+    struct Saved {
+        var preferences: SavedPreferences
+        var apiKey: String?
+        var settings: [String: Any]?
     }
 
-    static func save(_ preferences: SavedPreferences, account: Account) async throws {
+    /// What to do with the account's copy of the key on a save.
+    enum KeyUpload { case set(String), clear, keep }
+
+    /// Whether the database has the `settings` column yet (Backend/migration-2.6.sql adds it).
+    private static var hasSettingsColumn = true
+
+    static func load(_ account: Account) async throws -> Saved? {
+        guard account.isSignedIn, let token = try await account.token(), let id = account.user?.id else { return nil }
+        func fetch(_ columns: String) async throws -> Data {
+            try await Backend.request("GET", "/rest/v1/profiles", query: [
+                URLQueryItem(name: "id", value: "eq.\(id)"), URLQueryItem(name: "select", value: columns),
+            ], token: token)
+        }
+        let base = "instructions,instructions_enabled,my_words,mix_ups,api_key"
+        let data: Data
+        do {
+            data = try await fetch(hasSettingsColumn ? base + ",settings" : base)
+        } catch let error as BackendError where hasSettingsColumn && error.status == 400 {
+            hasSettingsColumn = false
+            data = try await fetch(base)
+        }
+        guard let preferences = try JSONDecoder().decode([SavedPreferences].self, from: data).first else { return nil }
+        let row = ((try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]])?.first
+        return Saved(preferences: preferences,
+                     apiKey: preferences.api_key.flatMap { KeyVault.open($0, user: id) },
+                     settings: row?["settings"] as? [String: Any])
+    }
+
+    static func save(_ preferences: SavedPreferences, key: KeyUpload, settings: [String: Any], account: Account) async throws {
         guard account.isSignedIn, let token = try await account.token(), let user = account.user else { return }
         var row = try JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences)) as? [String: Any] ?? [:]
         row["id"] = user.id
         row["email"] = user.email
         row["name"] = user.name
         row["updated_at"] = ISO8601DateFormatter().string(from: Date())
-        // Clears a key an older version saved to the account: keys now stay in the Mac's Keychain only.
-        row["api_key"] = NSNull()
-        _ = try await Backend.request("POST", "/rest/v1/profiles", json: [row], token: token,
-                                      prefer: "resolution=merge-duplicates,return=minimal")
+        // The key is only ever saved sealed (see KeyVault).
+        switch key {
+        case .set(let apiKey): row["api_key"] = KeyVault.seal(apiKey, user: user.id) ?? NSNull()
+        case .clear: row["api_key"] = NSNull()
+        case .keep: row.removeValue(forKey: "api_key")
+        }
+        if hasSettingsColumn { row["settings"] = settings }
+        do {
+            _ = try await Backend.request("POST", "/rest/v1/profiles", json: [row], token: token,
+                                          prefer: "resolution=merge-duplicates,return=minimal")
+        } catch let error as BackendError where hasSettingsColumn && error.status == 400
+                    && (error.errorDescription ?? "").contains("settings") {
+            hasSettingsColumn = false
+            row.removeValue(forKey: "settings")
+            _ = try await Backend.request("POST", "/rest/v1/profiles", json: [row], token: token,
+                                          prefer: "resolution=merge-duplicates,return=minimal")
+        }
     }
 }

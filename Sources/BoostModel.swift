@@ -1,3 +1,4 @@
+import CryptoKit
 import Combine
 import AVFoundation
 import CoreAudio
@@ -321,22 +322,70 @@ final class BoostModel: ObservableObject {
     private var prefsWatch: AnyCancellable?
     private var lastSavedPreferences: Data?
 
-    /// Saves your preferences to your account; right after signing in, first brings back what the
-    /// account already has.
-    func syncPreferences(loadFirst: Bool) {
-        guard account.isSignedIn else { return }
+    /// Saves your preferences, every setting and the sealed key to your account (when something
+    /// changed since the last save).
+    func syncPreferences() {
+        guard account.isSignedIn, !restoringFromAccount else { return }
         Task {
             do {
-                if loadFirst, let saved = try await PreferenceSync.load(account) { voiceTyping.apply(saved) }
-                let current = voiceTyping.savedPreferences()
-                let encoded = try JSONEncoder().encode(current)
-                guard encoded != lastSavedPreferences else { return }
-                try await PreferenceSync.save(current, account: account)
-                lastSavedPreferences = encoded
+                let preferences = voiceTyping.savedPreferences()
+                let settings = SettingsSync.snapshot()
+                let key = voiceTyping.keyUpload
+                var fingerprint = try JSONEncoder().encode(preferences)
+                fingerprint += Data(SettingsSync.canonical(settings).utf8)
+                if case .set(let value) = key { fingerprint += Data(SHA256.hash(data: Data(value.utf8))) }
+                if case .clear = key { fingerprint += Data("clear".utf8) }
+                guard fingerprint != lastSavedPreferences else { return }
+                try await PreferenceSync.save(preferences, key: key, settings: settings, account: account)
+                lastSavedPreferences = fingerprint
             } catch {
                 voiceLog.info("Saving preferences failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    private var restoringFromAccount = false
+    /// Settings from the account were written while key setup was still running: MicFlow restarts
+    /// to use them once setup is over.
+    private var restartAfterKeySetup = false
+
+    /// Right after a Google sign-in: first bring back what the account has (preferences, the key,
+    /// every setting), and only when there's still no working key, make one with Google.
+    private func signedIn(googleToken: String?, setUpKey: Bool) {
+        Task {
+            restoringFromAccount = true
+            if setUpKey { account.keySetup.showStep("Bringing back your settings…") }
+            var settingsChanged = false
+            if let saved = try? await PreferenceSync.load(account) {
+                voiceTyping.apply(saved.preferences, apiKey: saved.apiKey)
+                if let settings = saved.settings { settingsChanged = SettingsSync.apply(settings) }
+            }
+            restoringFromAccount = false
+            let needsKey = !voiceTyping.hasKey || voiceTyping.keyRefused
+            if setUpKey, needsKey {
+                account.keySetup.received(token: googleToken)
+                restartAfterKeySetup = settingsChanged
+            } else if setUpKey {
+                account.keySetup.finishedWithSavedKey()
+                voiceTyping.enabled = true
+            }
+            syncPreferences()
+            if settingsChanged, !(setUpKey && needsKey) { restartToApplySettings() }
+        }
+    }
+
+    /// Settings are read when MicFlow starts, so it restarts once to use the account's.
+    private func restartToApplySettings() {
+        account.keySetup.showStep("Bringing back your settings. MicFlow restarts in a moment…")
+        let script = """
+            while /bin/kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do /bin/sleep 0.2; done
+            /usr/bin/open "$1"
+            """
+        let reopen = Process()
+        reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+        reopen.arguments = ["-c", script, "reopen", Bundle.main.bundlePath]
+        try? reopen.run()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { NSApp.terminate(nil) }
     }
     private let defaults = UserDefaults.standard
 
@@ -432,10 +481,14 @@ final class BoostModel: ObservableObject {
         accountWatch = account.$user.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.evaluateLock() }
         }
-        account.onSignedIn = { [weak self] in self?.syncPreferences(loadFirst: true) }
+        account.onSignedIn = { [weak self] token, setUpKey in self?.signedIn(googleToken: token, setUpKey: setUpKey) }
+        account.onSignedOut = { [weak self] in
+            self?.lastSavedPreferences = nil
+            self?.account.keySetup.reset()
+            self?.voiceTyping.forgetKeyOnThisMac()
+        }
         // No key yet: signing in also makes one in the user's own account.
         account.wantsKeySetup = { [weak self] in !(self?.voiceTyping.hasKey ?? true) }
-        account.onGoogleToken = { [weak self] token in self?.account.keySetup.received(token: token) }
         account.keySetup.signIn = { [weak self] in self?.account.signIn(setUpKey: true) }
         account.keySetup.save = { [weak self] key in
             // nil means the key works and is saved.
@@ -443,8 +496,19 @@ final class BoostModel: ObservableObject {
             return await self.voiceTyping.saveKeyChecked(key)
         }
         account.keySetup.afterSave = { [weak self] in
-            self?.voiceTyping.enabled = true
-            self?.syncPreferences(loadFirst: false)
+            guard let self else { return }
+            self.voiceTyping.enabled = true
+            self.syncPreferences()
+            if self.restartAfterKeySetup {
+                self.restartAfterKeySetup = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.restartToApplySettings() }
+            }
+        }
+        voiceTyping.isSignedIn = { [weak self] in !(self?.account.isConfigured ?? false) || (self?.account.signedInForVoice ?? false) }
+        voiceTyping.openHome = { [weak self] in
+            guard let self else { return }
+            UserDefaults.standard.set("home", forKey: "homePage")
+            HomeWindow.show(model: self)
         }
         account.keySetup.fallbackEmail = { [weak self] in self?.account.user?.email }
         account.keySetup.hasKey = { [weak self] in self?.voiceTyping.hasKey ?? false }
@@ -452,9 +516,11 @@ final class BoostModel: ObservableObject {
             self?.voiceTyping.engine = .chrome
             self?.account.keySetup.reset()
         }
-        prefsWatch = voiceTyping.objectWillChange
-            .debounce(for: .seconds(3), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in self?.syncPreferences(loadFirst: false) }
+        // Any change to your preferences or settings is saved to your account a few seconds later.
+        prefsWatch = voiceTyping.objectWillChange.map { _ in () }
+            .merge(with: NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification).map { _ in () })
+            .debounce(for: .seconds(4), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in self?.syncPreferences() }
         evaluateLock()
         // New posts, update notes and pop-ups reach the app within half an hour.
         contentTimer = Timer.scheduledTimer(withTimeInterval: 30 * 60, repeats: true) { [weak self] _ in

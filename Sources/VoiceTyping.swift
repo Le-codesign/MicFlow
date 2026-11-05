@@ -63,6 +63,7 @@ final class VoiceTypingModel: ObservableObject {
     }
 
     private func keyChanged() {
+        if cachedKey != nil { keyRemovedByYou = false }
         keyFreePlanOff = false
         UserDefaults.standard.removeObject(forKey: "keyFreePlanOff")
     }
@@ -233,16 +234,23 @@ final class VoiceTypingModel: ObservableObject {
         }
     }
 
-    /// What's saved to your account when you're signed in. The API key never is: it stays in this
-    /// Mac's Keychain only, so nobody but this Mac can see or use it.
+    /// What's saved to your account when you're signed in (the key goes separately, sealed: see
+    /// `keyUpload` and KeyVault).
     func savedPreferences() -> SavedPreferences {
         SavedPreferences(instructions: yourInstructions, instructions_enabled: instructionsEnabled,
                          my_words: myWords, mix_ups: mixUps, api_key: nil)
     }
 
+    /// The key for the account's sealed copy: the key in use, or a clear after you removed it.
+    var keyUpload: PreferenceSync.KeyUpload {
+        if let cachedKey { return .set(cachedKey) }
+        return keyRemovedByYou ? .clear : .keep
+    }
+    private var keyRemovedByYou = false
+
     /// Brings back what your account has: words and mix-ups are added to the ones here, and the
-    /// account's instructions and API key are used if it has them.
-    func apply(_ saved: SavedPreferences) {
+    /// account's instructions and API key (unlocked) are used if it has them.
+    func apply(_ saved: SavedPreferences, apiKey: String?) {
         if !saved.instructions.isEmpty { yourInstructions = saved.instructions }
         instructionsEnabled = saved.instructions_enabled
         for word in saved.my_words { addWord(word) }
@@ -250,7 +258,9 @@ final class VoiceTypingModel: ObservableObject {
             mixUps.append(mixUp)
         }
         saveMixUps()
-        if let key = saved.api_key, !key.isEmpty, key != cachedKey {
+        // The account's key is used when this Mac has none (or Google refused the one here); a
+        // working key on this Mac stays, and is what gets saved to the account.
+        if let key = apiKey, !key.isEmpty, key != cachedKey, !hasKey || keyFreePlanOff {
             KeychainSecret.geminiKey.save(key)
             cachedKey = key
             hasKey = true
@@ -259,11 +269,24 @@ final class VoiceTypingModel: ObservableObject {
         }
     }
 
+    /// Logging out takes the key off this Mac too (it isn't "removed by you": the account keeps its
+    /// locked copy, which comes back at the next sign-in).
+    func forgetKeyOnThisMac() {
+        showingError = false
+        KeychainSecret.geminiKey.delete()
+        cachedKey = nil
+        hasKey = false
+        keyFreePlanOff = false
+        UserDefaults.standard.removeObject(forKey: "keyFreePlanOff")
+        updateStatus()
+    }
+
     func removeKey() {
         showingError = false
         KeychainSecret.geminiKey.delete()
         cachedKey = nil
         hasKey = false
+        keyRemovedByYou = true
         keyChanged()
         updateStatus()
     }
@@ -506,8 +529,17 @@ final class VoiceTypingModel: ObservableObject {
         }
     }
 
+    /// Voice typing (both models) needs a Google sign-in first. Set by the app.
+    var isSignedIn: () -> Bool = { true }
+    var openHome: () -> Void = {}
+
     private func keyDown(_ key: VoiceKey) {
         guard phase == .idle, pressedAt == nil, !isLocked else { return }
+        guard isSignedIn() else {
+            startProblem("Sign in with Google in MicFlow to start voice typing. It sets everything up for you.")
+            openHome()
+            return
+        }
         switch engine {
         case .chrome:
             guard chrome.isConnected else {
@@ -524,7 +556,8 @@ final class VoiceTypingModel: ObservableObject {
                     loadKeyIfNeeded()
                     startProblem("Getting your API key from the Keychain. If macOS asks, click Always Allow, then try again.")
                 } else {
-                    startProblem("Voice typing needs to be set up first: open MicFlow, and Home shows the two ways (about a minute).")
+                    startProblem("Voice typing isn't set up yet: open MicFlow's Home to finish it (about a minute).")
+                    openHome()
                 }
                 return
             }

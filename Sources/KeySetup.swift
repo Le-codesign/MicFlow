@@ -19,7 +19,19 @@ final class KeySetupFlow: ObservableObject {
         case done
     }
 
-    @Published private(set) var stage = Stage.idle
+    @Published private(set) var stage = Stage.idle {
+        didSet {
+            switch stage {
+            case .failed, .freePlanOff, .missingPermission: hasFailed = true
+            case .done: hasFailed = false
+            default: break
+            }
+        }
+    }
+    /// Setting up with Google didn't work at least once: Home then also offers pasting a key.
+    @Published private(set) var hasFailed = false
+    /// Google's own words when it refused to make a key, shown small under the simple explanation.
+    @Published private(set) var failureDetail: String?
     @Published var showGuide = false
     /// The Google account the key is being made in (to open Google's pages in that account).
     @Published private(set) var email: String?
@@ -77,6 +89,24 @@ final class KeySetupFlow: ObservableObject {
     /// The button: the guide first (unless turned off), then Google.
     func begin() {
         if UserDefaults.standard.bool(forKey: Self.skipGuideKey) { continueToGoogle() } else { showGuide = true }
+    }
+
+    /// A step of the sign-in that isn't Google's (bringing back settings, restarting).
+    func showStep(_ text: String) {
+        stop()
+        stage = .working(text)
+    }
+
+    /// The account already had a key (brought back from it): nothing to make.
+    func finishedWithSavedKey() {
+        stop()
+        stage = .done
+    }
+
+    /// "I've accepted": check right now, in case the automatic check hasn't caught it yet.
+    func confirmAccepted() {
+        justAccepted = false
+        checkNow()
     }
 
     /// Back to the start (e.g. after switching to Model 2).
@@ -169,8 +199,14 @@ final class KeySetupFlow: ObservableObject {
         } catch where stage == .needsTerms && error is URLError {
             // Offline for a moment while waiting: keep checking.
             return true
+        } catch is URLError {
+            stage = .failed("MicFlow couldn't reach Google. Check your internet connection and try again.")
+            stop()
+            return false
         } catch {
-            stage = .failed(error.localizedDescription)
+            // Google refused to make a project or key for this account.
+            failureDetail = error.localizedDescription
+            stage = .freePlanOff
             stop()
             return false
         }
@@ -249,76 +285,126 @@ final class KeySetupFlow: ObservableObject {
 
 // MARK: - Guide
 
-/// The pop-up before Google's sign-in: what's about to happen and the two screens to get past.
+/// The pop-up before Google's sign-in: three short slides in MicFlow's colours, one thing to do on
+/// each Google screen, then Google's own "Continue with Google" button.
 struct GoogleKeyGuide: View {
     @ObservedObject var flow: KeySetupFlow
     @AppStorage(KeySetupFlow.skipGuideKey) private var dontShowAgain = false
+    @State private var index = 0
+
+    private struct Slide {
+        let image: String
+        let title: String
+        let detail: String
+    }
+
+    private let slides = [
+        Slide(image: "Guide-Advanced", title: "Click Advanced, then \"Go to … (unsafe)\"",
+              detail: "Google shows this warning because its review of MicFlow isn't finished yet. MicFlow only uses the access to make your key."),
+        Slide(image: "Guide-Tick", title: "Tick the Google Cloud box",
+              detail: "This is the important one. Without the tick MicFlow can't make your key. Then click Continue."),
+        Slide(image: "Guide-Accept", title: "Accept Google's terms",
+              detail: "One or two pages, only once. MicFlow opens them in the right account and notices when you're done."),
+    ]
 
     var body: some View {
+        let slide = slides[index]
         VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Before you sign in: 3 quick things").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.cream)
+                Spacer()
+                HStack(spacing: 6) {
+                    ForEach(slides.indices, id: \.self) { dot in
+                        Capsule().fill(dot == index ? Palette.yellow : Color.white.opacity(0.25))
+                            .frame(width: dot == index ? 26 : 8, height: 8)
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: index)
+            }
+            .padding(.horizontal, 26).padding(.top, 22)
+
+            ZStack(alignment: .topLeading) {
+                GuideImage(name: slide.image, maxHeight: 290)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, minHeight: 300)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                Text("\(index + 1)").font(.display(30)).foregroundStyle(Palette.white)
+                    .frame(width: 58, height: 52)
+                    .background(Palette.pink, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.white, lineWidth: 3))
+                    .rotationEffect(.degrees(-10))
+                    .offset(x: -12, y: -14)
+            }
+            .padding(.horizontal, 26).padding(.top, 22)
+
             VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 18, weight: .bold)).foregroundStyle(Palette.ink)
-                    .frame(width: 40, height: 40).background(Palette.yellow, in: Circle())
-                Text("Let MicFlow set up your key").font(.display(26))
-                Text("Sign in with Google and MicFlow creates your free API key in your own Google account and saves it for you, so you never copy or paste a key. It takes about a minute. Google shows two screens on the way; here's what to click.")
-                    .font(.system(size: 13)).foregroundStyle(Palette.ink.opacity(0.7))
+                Text(slide.title).font(.display(28)).foregroundStyle(Palette.white)
+                Text(slide.detail).font(.system(size: 14)).foregroundStyle(Palette.white.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding([.horizontal, .top], 24).padding(.bottom, 14)
+            .padding(.horizontal, 26).padding(.top, 18)
+            .id(index)
+            .transition(.opacity)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    GuideStep(number: 1, image: "Guide-Advanced",
-                              title: "Google says it hasn't verified MicFlow: click Advanced, then \"Go to … (unsafe)\"",
-                              detail: "You see this because Google's review of MicFlow isn't finished yet. MicFlow only uses this access to make your key.")
-                    GuideStep(number: 2, image: "Guide-Tick",
-                              title: "Tick this box. This is the important one",
-                              detail: "It lets MicFlow create the key in your Google account. Without the tick, setup can't finish. Then click Continue at the bottom.")
-                    GuideStep(number: 3, image: "Guide-Accept",
-                              title: "If Google asks, accept its terms (one click per page)",
-                              detail: "Only the first time, and sometimes two pages in a row. MicFlow opens each page in the same Google account and notices by itself once you've clicked Accept.")
-                }
-                .padding(.horizontal, 24).padding(.bottom, 8)
-            }
-
-            Divider()
+            Spacer(minLength: 16)
             HStack(spacing: 10) {
-                Toggle("Don't show this again", isOn: $dontShowAgain)
-                    .toggleStyle(.checkbox).font(.system(size: 12))
+                Toggle(isOn: $dontShowAgain) {
+                    Text("Don't show this again").font(.system(size: 12)).foregroundStyle(Palette.white.opacity(0.85))
+                }
+                .toggleStyle(.checkbox)
                 Spacer()
-                Button("Cancel") { flow.showGuide = false }
+                PillButton(title: "Cancel", style: .outline) { flow.showGuide = false }
                     .keyboardShortcut(.cancelAction)
-                PillButton(title: "Continue with Google", systemImage: "arrow.right", style: .ink, action: flow.continueToGoogle)
+                if index > 0 {
+                    PillButton(title: "Back", systemImage: "chevron.left", style: .outline) { withAnimation { index -= 1 } }
+                }
+                if index < slides.count - 1 {
+                    PillButton(title: "Next", systemImage: "chevron.right", style: .cream) { withAnimation { index += 1 } }
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    GoogleSignInButton(title: "Continue with Google", size: .regular, action: flow.continueToGoogle)
+                        .keyboardShortcut(.defaultAction)
+                }
             }
-            .padding(.horizontal, 24).padding(.vertical, 14)
+            .padding(.horizontal, 26).padding(.vertical, 18)
+            .background(Color.black.opacity(0.18))
         }
-        .foregroundStyle(Palette.ink)
-        .frame(width: 560, height: 640)
-        .background(Color.white)
-        .environment(\.colorScheme, .light)
+        .frame(width: 600, height: 640)
+        .background(HomeTheme.green.frame)
+        .environment(\.colorScheme, .dark)
     }
 }
 
-private struct GuideStep: View {
-    let number: Int
-    let image: String
-    let title: String
-    let detail: String
+/// Google's own light "Sign in with Google" button (from Google's branding guidelines): white,
+/// a thin grey outline, the four-colour G and dark text, so people recognise it at once.
+struct GoogleSignInButton: View {
+    enum Size { case regular, large }
+    var title = "Sign in with Google"
+    var size = Size.large
+    var isWorking = false
+    let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("\(number)").font(.system(size: 12, weight: .heavy)).foregroundStyle(Palette.white)
-                    .frame(width: 22, height: 22).background(Palette.orange, in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 14, weight: .bold)).fixedSize(horizontal: false, vertical: true)
-                    Text(detail).font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.65))
-                        .fixedSize(horizontal: false, vertical: true)
+        Button(action: action) {
+            HStack(spacing: size == .large ? 14 : 10) {
+                if isWorking {
+                    Spinner().frame(width: size == .large ? 26 : 18, height: size == .large ? 26 : 18)
+                } else if let logo = Bundle.main.url(forResource: "GoogleG", withExtension: "svg").flatMap(NSImage.init(contentsOf:)) {
+                    Image(nsImage: logo).resizable().frame(width: size == .large ? 26 : 18, height: size == .large ? 26 : 18)
                 }
+                Text(isWorking ? "Waiting for Google…" : title)
+                    .font(.system(size: size == .large ? 19 : 14, weight: .semibold))
+                    .foregroundStyle(Color(hex: 0x1F1F1F))
             }
-            GuideImage(name: image)
+            .padding(.horizontal, size == .large ? 28 : 18)
+            .frame(height: size == .large ? 60 : 40)
+            .background(Color.white, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color(hex: 0x747775), lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .disabled(isWorking)
     }
 }
 
@@ -361,7 +447,7 @@ struct KeySetupStatus: View {
             }
             .foregroundStyle(Palette.cream)
         case .done:
-            Note(text: "Voice typing is set up. Your key is saved in this Mac's Keychain.")
+            Note(text: "Voice typing is ready. Your key is saved in this Mac's Keychain and, locked, in your account, so it comes back on any Mac you sign in on.")
         case .failed(let message):
             VStack(alignment: .leading, spacing: 6) {
                 Note(text: "Couldn't set up the key automatically: \(message)", isError: true)
@@ -369,26 +455,32 @@ struct KeySetupStatus: View {
             }
         case .missingPermission:
             InfoPanel(icon: "checkmark.square", title: "The Google Cloud box wasn't ticked",
-                      detail: "MicFlow can't create your key without it. Click Try again, and on Google's screen tick the box shown here, then click Continue.") {
+                      detail: "MicFlow needs that permission to make your key. Click Try again, tick the box shown here on Google's screen, then click Continue.") {
                 GuideImage(name: "Guide-Tick", maxHeight: 200)
                 PillButton(title: "Try again", systemImage: "arrow.clockwise", style: .ink, action: flow.continueToGoogle)
             }
         case .needsTerms:
             TermsPanel(flow: flow)
         case .freePlanOff:
-            InfoPanel(icon: "exclamationmark.triangle", title: "Google turned off the free plan for this Google account",
-                      detail: "MicFlow made the key, but Google doesn't let this account use it for free: every request is refused until billing is added. This is Google's decision for the whole account and mostly hits brand-new accounts, so a new key in the same account won't help.") {
+            InfoPanel(icon: "person.crop.circle.badge.exclamationmark", title: "This Google account can't get a voice key yet",
+                      detail: "Google decides which accounts get the free key, partly from how the account has been used (Google's own note is below). It isn't something you did wrong.") {
+                GuideImage(name: "Guide-GoogleNote", maxHeight: 120)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("What you can do").font(.system(size: 12, weight: .bold))
-                    Text("• Set it up again and pick a Google account you've used for a while.")
-                    Text("• Or switch to Model 2: it needs no key at all.")
-                    Text("• Or add billing to that Google account (paid).")
+                    Text("What we found").font(.system(size: 12, weight: .bold))
+                    Text("Some of our Google accounts that hadn't been used for a long time couldn't get a key. After we used them for a day (Gmail, YouTube, search), Google let them make one.")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("What to do").font(.system(size: 12, weight: .bold)).padding(.top, 4)
+                    Text("• Use this Google account as usual for a while, then try again in a few hours or tomorrow.")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("• Or try now with a Google account you use every day.")
+                    Text("• Or paste your own key (below), if you have one.")
                 }
-                .font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.75))
-                HStack(spacing: 8) {
-                    PillButton(title: "Use another Google account", systemImage: "person.2", style: .ink, action: flow.continueToGoogle)
-                    PillButton(title: "Switch to Model 2", systemImage: "waveform", style: .cream, action: flow.useModel2)
+                .font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.78))
+                if let detail = flow.failureDetail {
+                    Text("Google said: \(ProviderName.hide(detail))").font(.system(size: 11)).foregroundStyle(Palette.ink.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                PillButton(title: "Try another Google account", systemImage: "person.2", style: .ink, action: flow.continueToGoogle)
             }
         }
     }
@@ -397,25 +489,21 @@ struct KeySetupStatus: View {
 private struct TermsPanel: View {
     @ObservedObject var flow: KeySetupFlow
 
-    /// The usual order: the Google APIs terms (accounts new to Google Cloud), then the model's own.
-    private enum Page { case apis, model, cloud }
-    private var current: Page {
+    private enum Current { case apis, model, cloud }
+    private var current: Current {
         switch flow.termsID {
         case "universal": return .apis
         case "cloud": return .cloud
         default: return .model
         }
     }
-    /// Which page this is out of how many, as far as MicFlow can tell.
-    private var number: Int { current == .model ? 2 : 1 }
-    private var total: Int { current == .cloud ? 1 : 2 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if flow.justAccepted {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.mintText)
-                    Text("Page 1 accepted. MicFlow opened page 2 for you: it looks almost the same, but it's a different page. Click Accept there too.")
+                    Text("Step 2 is done. MicFlow opened step 3 for you: it looks almost the same, but it's a different page. Click Accept there too.")
                         .font(.system(size: 12, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(Palette.ink)
@@ -423,35 +511,25 @@ private struct TermsPanel: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Palette.mint, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            InfoPanel(icon: "doc.text.magnifyingglass",
-                      title: total > 1 ? "Accept Google's terms: page \(number) of \(total)" : "Accept Google Cloud's terms",
-                      detail: "Google needs your Google account to accept its terms once before it makes a key. Click Accept on each page; MicFlow notices by itself and moves on.") {
-                if total > 1 {
-                    VStack(alignment: .leading, spacing: 6) {
-                        TermsRow(number: 1, title: "Google APIs Terms of Service", address: "…/terms/universal",
-                                 state: current == .apis ? .now : .done(flow.acceptedTerms > 0 ? "Accepted" : "Already accepted"))
-                        TermsRow(number: 2, title: "The voice model's terms", address: "…/terms/generative-language-api",
-                                 state: current == .model ? .now : .next)
-                    }
-                    Text("The two pages look almost the same. The page's address shows which one you're on.")
-                        .font(.system(size: 11)).foregroundStyle(Palette.ink.opacity(0.6))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                GuideImage(name: "Guide-Accept", maxHeight: 150)
-                HStack(spacing: 10) {
-                    PillButton(title: total > 1 ? "Open page \(number)" : "Open the terms page", systemImage: "arrow.up.right",
-                               style: .ink, action: flow.openTerms)
-                    if flow.isWatching {
-                        ProgressView().controlSize(.small)
-                        Text(flow.isChecking ? "Checking…" : "Checking automatically").font(.system(size: 11))
-                            .foregroundStyle(Palette.ink.opacity(0.6))
-                    } else {
-                        PillButton(title: flow.hasValidToken ? "Check again" : "Sign in again", systemImage: "arrow.clockwise",
-                                   style: .cream, action: flow.checkNow)
+            InfoPanel(icon: "doc.text.magnifyingglass", title: "Almost done: accept Google's terms",
+                      detail: "Google asks every account to accept its terms once before it makes a key. Do the steps in order; MicFlow notices each one by itself.") {
+                VStack(alignment: .leading, spacing: 0) {
+                    TermsStep(number: 1, title: "Allow Google Cloud access", address: "The box you ticked on Google's screen",
+                              state: .done("Done"), isLast: false, flow: flow, pageNumber: nil)
+                    TermsStep(number: 2, title: current == .cloud ? "Google Cloud Terms of Service" : "Google APIs Terms of Service",
+                              address: current == .cloud ? "console.cloud.google.com" : "…/terms/universal",
+                              state: current == .model ? .done(flow.acceptedTerms > 0 ? "Accepted" : "Already accepted") : .now,
+                              isLast: current == .cloud, flow: flow, pageNumber: 2)
+                    if current != .cloud {
+                        TermsStep(number: 3, title: "The voice model's terms", address: "…/terms/generative-language-api",
+                                  state: current == .model ? .now : .next, isLast: true, flow: flow, pageNumber: 3)
                     }
                 }
+                Text("Steps 2 and 3 look almost the same. The page's address shows which one you're on.")
+                    .font(.system(size: 11)).foregroundStyle(Palette.ink.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
                 if let email = flow.email {
-                    Text("The page opens in your Google account **\(email)**.").font(.system(size: 12))
+                    Text("The pages open in your Google account **\(email)**.").font(.system(size: 12))
                 }
                 Divider().padding(.vertical, 2)
                 Text("Does it say \"already been accepted\" but MicFlow still waits?").font(.system(size: 12, weight: .bold))
@@ -463,56 +541,92 @@ private struct TermsPanel: View {
     }
 }
 
-/// One terms page in the list: done, the one to accept now, or next.
-private struct TermsRow: View {
+/// One step of the terms, joined to the next by a line that turns green once the step is done.
+/// The step to do now has its own buttons and the checking status under it.
+private struct TermsStep: View {
     enum State { case done(String), now, next }
     let number: Int
     let title: String
     let address: String
     let state: State
+    let isLast: Bool
+    @ObservedObject var flow: KeySetupFlow
+    let pageNumber: Int?
+
+    private var isDone: Bool { if case .done = state { return true } else { return false } }
+    private var isNow: Bool { if case .now = state { return true } else { return false } }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Group {
-                switch state {
-                case .done: Image(systemName: "checkmark").foregroundStyle(Palette.white)
-                default: Text("\(number)").foregroundStyle(isNow ? Palette.white : Palette.ink.opacity(0.5))
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 0) {
+                ZStack {
+                    Circle().fill(isDone ? Palette.mintText : isNow ? Palette.orange : Color.black.opacity(0.08))
+                    if isDone {
+                        Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(Palette.white)
+                    } else {
+                        Text("\(number)").font(.system(size: 12, weight: .heavy))
+                            .foregroundStyle(isNow ? Palette.white : Palette.ink.opacity(0.45))
+                    }
+                }
+                .frame(width: 26, height: 26)
+                if !isLast {
+                    Rectangle().fill(isDone ? Palette.mintText : Color.black.opacity(0.12))
+                        .frame(width: 3).frame(maxHeight: .infinity)
                 }
             }
-            .font(.system(size: 11, weight: .heavy))
-            .frame(width: 22, height: 22)
-            .background(background, in: Circle())
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 12, weight: isNow ? .bold : .medium))
-                Text(address).font(.system(size: 10, design: .monospaced)).foregroundStyle(Palette.ink.opacity(0.5))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title).font(.system(size: 13, weight: isNow ? .bold : .semibold))
+                            .foregroundStyle(Palette.ink.opacity(isNow || isDone ? 1 : 0.5))
+                        Text(address).font(.system(size: 10, design: .monospaced)).foregroundStyle(Palette.ink.opacity(0.5))
+                    }
+                    Spacer()
+                    if case .done(let label) = state {
+                        Text(label).font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.mintText)
+                    } else if case .next = state {
+                        Text("Next").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink.opacity(0.4))
+                    }
+                }
+                if isNow {
+                    if number == 3 {
+                        GuideImage(name: "Guide-Accept", maxHeight: 110)
+                    } else {
+                        Text("Open the page and click the blue Accept button.").font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.75))
+                    }
+                    HStack(spacing: 8) {
+                        PillButton(title: "Open step \(pageNumber ?? number)", systemImage: "arrow.up.right", style: .ink, action: flow.openTerms)
+                        PillButton(title: "I've accepted", systemImage: "checkmark", style: .outlineOnLight, action: flow.confirmAccepted)
+                    }
+                    HStack(spacing: 8) {
+                        if flow.isWatching || flow.isChecking {
+                            Spinner()
+                            Text(flow.isChecking ? "Checking with Google now…" : "Checking automatically every few seconds")
+                                .font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink)
+                        } else {
+                            Image(systemName: "pause.circle.fill").foregroundStyle(Palette.ink.opacity(0.6))
+                            Text(flow.hasValidToken ? "Automatic checking stopped. Click I've accepted after accepting."
+                                 : "Google's access ran out. Click I've accepted to sign in again.")
+                                .font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink.opacity(0.75))
+                        }
+                    }
+                }
             }
-            Spacer()
-            Text(label).font(.system(size: 10, weight: .bold))
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .foregroundStyle(isNow ? Palette.white : Palette.ink.opacity(0.6))
-                .background(isNow ? Palette.orange : Color.black.opacity(0.06), in: Capsule())
+            .padding(.bottom, isLast ? 0 : 14)
         }
-        .padding(8)
-        .background(isNow ? Color.white : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(isNow ? Palette.orange : .clear, lineWidth: 1.5))
-        .opacity(isNext ? 0.6 : 1)
     }
+}
 
-    private var isNow: Bool { if case .now = state { return true } else { return false } }
-    private var isNext: Bool { if case .next = state { return true } else { return false } }
-    private var background: Color {
-        switch state {
-        case .done: return Palette.mintText
-        case .now: return Palette.orange
-        case .next: return Color.black.opacity(0.08)
-        }
-    }
-    private var label: String {
-        switch state {
-        case .done(let text): return text
-        case .now: return "Accept now"
-        case .next: return "Next, if Google asks"
-        }
+/// A dark, clearly visible loading ring (the system one is too faint on cream).
+struct Spinner: View {
+    @State private var turning = false
+    var body: some View {
+        Circle().trim(from: 0, to: 0.72)
+            .stroke(Palette.ink, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+            .frame(width: 14, height: 14)
+            .rotationEffect(.degrees(turning ? 360 : 0))
+            .animation(.linear(duration: 0.8).repeatForever(autoreverses: false), value: turning)
+            .onAppear { turning = true }
     }
 }
 

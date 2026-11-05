@@ -69,6 +69,9 @@ struct KeyRemap: Codable, Hashable, Identifiable {
 final class KeyRemapController {
     enum State: Equatable {
         case off, noKeyboard, karabinerActive, needsAccessibility, running
+        /// System Settings › Keyboard › Modifier Keys also changes keys on a connected keyboard;
+        /// macOS applies both, so the two together mix keys up.
+        case systemModifierKeys
     }
 
     var remaps: [KeyRemap] = [] { didSet { apply() } }
@@ -145,7 +148,10 @@ final class KeyRemapController {
         guard timer != nil, Self.isActiveSession else { return }
         let services = keyboards()
         appliedServices = registryIDs(services)
-        let mapping = remaps.map { ["HIDKeyboardModifierMappingSrc": $0.from, "HIDKeyboardModifierMappingDst": $0.to] }
+        // One remap per key: if a key is listed twice, the last row wins.
+        var seen = Set<UInt64>()
+        let unique = remaps.reversed().filter { seen.insert($0.from).inserted }.reversed()
+        let mapping = unique.map { ["HIDKeyboardModifierMappingSrc": $0.from, "HIDKeyboardModifierMappingDst": $0.to] }
         for service in services {
             IOHIDServiceClientSetProperty(service, "UserKeyMapping" as CFString, mapping as CFArray)
         }
@@ -166,6 +172,8 @@ final class KeyRemapController {
             setState(.noKeyboard)
         } else if karabinerIsActive() {
             setState(.karabinerActive)
+        } else if !remaps.isEmpty, systemModifierKeysSet() {
+            setState(.systemModifierKeys)
         } else if needsLanguageTap, !languageTap.isInstalled {
             setState(.needsAccessibility)
         } else {
@@ -191,7 +199,23 @@ final class KeyRemapController {
 
     private func keyboards() -> [IOHIDServiceClient] { allKeyboards().filter { !isKarabiner($0) } }
 
-    private func karabinerIsActive() -> Bool { allKeyboards().contains(where: isKarabiner) }
+    /// Karabiner takes keyboards over before macOS's remapping: its virtual keyboard (any HID
+    /// service named Karabiner) shows that it's doing so right now.
+    private func karabinerIsActive() -> Bool {
+        (IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient] ?? []).contains(where: isKarabiner)
+    }
+
+    /// Whether System Settings › Keyboard › Modifier Keys has changes saved for a connected keyboard
+    /// (stored per keyboard as com.apple.keyboard.modifiermapping.<vendor>-<product>-0).
+    private func systemModifierKeysSet() -> Bool {
+        keyboards().contains { service in
+            guard let vendor = (IOHIDServiceClientCopyProperty(service, kIOHIDVendorIDKey as CFString) as? NSNumber)?.intValue,
+                  let product = (IOHIDServiceClientCopyProperty(service, kIOHIDProductIDKey as CFString) as? NSNumber)?.intValue else { return false }
+            let name = "com.apple.keyboard.modifiermapping.\(vendor)-\(product)-0" as CFString
+            let value = CFPreferencesCopyValue(name, kCFPreferencesAnyApplication, kCFPreferencesCurrentUser, kCFPreferencesCurrentHost)
+            return ((value as? [Any])?.isEmpty == false)
+        }
+    }
 
     private func registryIDs(_ services: [IOHIDServiceClient]) -> [UInt64] {
         services.compactMap { (IOHIDServiceClientGetRegistryID($0) as? NSNumber)?.uint64Value }

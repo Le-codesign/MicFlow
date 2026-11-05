@@ -66,6 +66,12 @@ private struct MenuBarIcon: View {
 /// icon tabs, and each tab's page in one column.
 struct BoostView: View {
     @ObservedObject var model: BoostModel
+    @ObservedObject var account: Account
+
+    init(model: BoostModel) {
+        self.model = model
+        account = model.account
+    }
     @AppStorage("homeDarkTheme") private var dark = false
 
     private enum Tab: String, CaseIterable {
@@ -88,6 +94,9 @@ struct BoostView: View {
 
     private var theme: HomeTheme { dark ? .dark : .green }
 
+    /// Voice is hidden while signed out: a remembered Voice tab shows Sound instead.
+    private var shownTab: Tab { tab == .voice && !account.showsVoiceTab ? .sound : tab }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
@@ -100,8 +109,8 @@ struct BoostView: View {
 
             // Round icon tabs: the selected one cream with its name.
             HStack(spacing: 6) {
-                ForEach(Tab.allCases, id: \.self) { item in
-                    let selected = item == tab
+                ForEach(Tab.allCases.filter { $0 != .voice || account.showsVoiceTab }, id: \.self) { item in
+                    let selected = item == shownTab
                     Button { tab = item } label: {
                         HStack(spacing: 6) {
                             Image(systemName: item.systemImage).font(.system(size: 13, weight: .bold))
@@ -118,7 +127,7 @@ struct BoostView: View {
                     .help(item.rawValue)
                 }
             }
-            .animation(.easeOut(duration: 0.15), value: tab)
+            .animation(.easeOut(duration: 0.15), value: shownTab)
 
             // Every tab gets the same fixed height and scrolls inside it: a menu bar panel that
             // changes height leaves a see-through gap where it used to be.
@@ -126,7 +135,7 @@ struct BoostView: View {
                 if model.locked, let blocker = model.siteContent.content.block {
                     BlockerView(blocker: blocker, updater: model.updater, signIn: model.signInAction)
                 } else {
-                switch tab {
+                switch shownTab {
                 case .sound: SoundPage(model: model, theme: theme)
                 case .voice:
                     VoicePage(voice: model.voiceTyping, theme: theme) {

@@ -299,7 +299,7 @@ struct Note: View {
     }
 }
 
-enum PillButtonStyle { case cream, orange, yellow, outline, ink }
+enum PillButtonStyle { case cream, orange, yellow, outline, ink, outlineOnLight }
 
 struct PillButton: View {
     let title: String
@@ -317,7 +317,8 @@ struct PillButton: View {
             .foregroundStyle(foreground)
             .padding(.horizontal, 14).padding(.vertical, 8)
             .background(background, in: Capsule())
-            .overlay(Capsule().strokeBorder(style == .outline ? Color.white.opacity(0.2) : .clear))
+            .overlay(Capsule().strokeBorder(style == .outline ? Color.white.opacity(0.2) : style == .outlineOnLight ? Palette.ink.opacity(0.35) : .clear,
+                                            lineWidth: style == .outlineOnLight ? 1.5 : 1))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -329,13 +330,14 @@ struct PillButton: View {
         case .orange: return Palette.orange
         case .yellow: return Palette.yellow
         case .outline: return .clear
+        case .outlineOnLight: return Color.white
         case .ink: return Palette.ink
         }
     }
 
     private var foreground: Color {
         switch style {
-        case .cream, .yellow: return Palette.ink
+        case .cream, .yellow, .outlineOnLight: return Palette.ink
         case .orange, .ink, .outline: return Palette.white
         }
     }
@@ -889,8 +891,10 @@ struct KeyboardPage: View {
                         Text("Remaps").font(.display(24))
                         Spacer()
                         PillButton(title: "Add remap", systemImage: "plus", style: .yellow) {
-                            // A new row starts as Caps Lock → Escape; change both to taste.
-                            model.keyRemaps.append(KeyRemap(from: 0x7_0000_0039, to: 0x7_0000_0029))
+                            // A new row starts as Caps Lock → Escape (or the first key not remapped yet).
+                            let used = Set(model.keyRemaps.map(\.from))
+                            let from = used.contains(0x7_0000_0039) ? (KeyChoice.keys.first { !used.contains($0.usage) }?.usage ?? 0x7_0000_0039) : 0x7_0000_0039
+                            model.keyRemaps.append(KeyRemap(from: from, to: 0x7_0000_0029))
                         }
                     }
                     ForEach($model.keyRemaps) { $remap in
@@ -908,6 +912,9 @@ struct KeyboardPage: View {
                     if model.keyRemaps.isEmpty {
                         Text("No remaps yet. Click Add remap.").font(.system(size: 13)).foregroundStyle(Palette.greyOnLight)
                     }
+                    if Set(model.keyRemaps.map(\.from)).count < model.keyRemaps.count {
+                        Text("A key is listed twice; only its last row is used.").font(.system(size: 12)).foregroundStyle(Palette.orange)
+                    }
                 }
                 status
             }
@@ -917,7 +924,16 @@ struct KeyboardPage: View {
     @ViewBuilder private var status: some View {
         switch model.keyRemapState {
         case .karabinerActive:
-            DarkCard(theme: theme) { Note(text: "Karabiner-Elements is still active, so it's doing the remapping for now. These remaps take over once you uninstall it.", isError: true) }
+            DarkCard(theme: theme) { Note(text: "Karabiner-Elements is running and has taken over your keyboard, so these remaps can't work. Quit Karabiner-Elements (or uninstall it) and they work at once.", isError: true) }
+        case .systemModifierKeys:
+            DarkCard(theme: theme) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Note(text: "System Settings › Keyboard › Modifier Keys also changes keys on this keyboard. macOS applies both, so keys get mixed up (two Ctrl ⇄ Cmd swaps cancel out). Click Restore Defaults there, or turn MicFlow's remapping off.", isError: true)
+                    PillButton(title: "Open Keyboard Settings", systemImage: "keyboard", style: .cream) {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
+                    }
+                }
+            }
         case .needsAccessibility:
             DarkCard(theme: theme) { AccessibilityNotice(open: model.openAccessibilitySettings) }
         case .noKeyboard:

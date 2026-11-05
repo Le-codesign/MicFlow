@@ -18,7 +18,7 @@ enum HomeWindow {
             window.titleVisibility = .hidden
             window.isReleasedWhenClosed = false
             window.contentMinSize = CGSize(width: 1180, height: 740)
-            window.contentView = NSHostingView(rootView: HomeView(model: model, voice: model.voiceTyping, log: model.voiceTyping.log))
+            window.contentView = NSHostingView(rootView: HomeView(model: model, voice: model.voiceTyping, log: model.voiceTyping.log, account: model.account))
             window.center()
             self.window = window
         }
@@ -138,6 +138,8 @@ private struct HomeView: View {
     @ObservedObject var model: BoostModel
     @ObservedObject var voice: VoiceTypingModel
     @ObservedObject var log: DictationLog
+    /// Watched too, so Home and the sidebar change the moment you sign in or out.
+    @ObservedObject var account: Account
     /// Green is the default; the switch turns on the dark frame.
     @AppStorage("homeDarkTheme") private var dark = false
     @AppStorage("homePage") private var page = Page.home
@@ -180,18 +182,21 @@ private struct HomeView: View {
 
     var theme: HomeTheme { dark ? .dark : .green }
 
+    /// Voice Typing is only there while you're signed in; a remembered Voice page opens Home instead.
+    private var shownPage: Page { page == .voice && !account.showsVoiceTab ? .home : page }
+
     var body: some View {
         HStack(spacing: 10) {
-            Sidebar(page: $page, dark: $dark, theme: theme)
+            Sidebar(page: $page, dark: $dark, theme: theme, account: model.account)
             VStack(spacing: 10) {
                 // Until voice typing has a key, every page but Home points back to Home's setup.
-                if page != .home { VoiceSetupBanner(voice: voice, openHome: { page = .home }) }
-                switch page {
+                if shownPage != .home { VoiceSetupBanner(voice: voice, account: model.account, openHome: { page = .home }) }
+                switch shownPage {
                 case .home:
                     VStack(spacing: 10) {
                         SetupBanner(voice: voice, openVoice: { page = .voice })
                         UpdateBanner(updater: model.updater, store: model.siteContent)
-                        if voice.needsKeySetup {
+                        if voiceNeedsSetup(voice, model.account) {
                             HomeKeySetup(voice: voice, account: model.account, theme: theme)
                         } else {
                             HomeBoard(voice: voice, log: log, theme: theme, openDictionary: { page = .dictionary })
@@ -226,6 +231,7 @@ private struct Sidebar: View {
     @Binding var page: HomeView.Page
     @Binding var dark: Bool
     let theme: HomeTheme
+    @ObservedObject var account: Account
     /// Wide: icons with their names beside them. Narrow: names under the icons.
     @AppStorage("sidebarExpanded") private var expanded = true
 
@@ -233,8 +239,8 @@ private struct Sidebar: View {
         VStack(alignment: expanded ? .leading : .center, spacing: expanded ? 4 : 6) {
             header.padding(.top, expanded ? 46 : 38).padding(.bottom, expanded ? 14 : 8)
             item(.home)
-            // Voice typing is the main feature, so it comes right after Home.
-            item(.voice)
+            // Voice typing is the main feature, so it comes right after Home (once you're signed in).
+            if account.showsVoiceTab { item(.voice) }
             Capsule().fill(Color.white.opacity(0.15)).frame(width: expanded ? nil : 28, height: 2)
                 .padding(.vertical, 6).padding(.horizontal, expanded ? 8 : 0)
             ForEach([HomeView.Page.sound, .mouse, .keyboard, .figma, .capture, .dictionary], id: \.self) { item($0) }
@@ -242,9 +248,9 @@ private struct Sidebar: View {
             item(.general)
             Group {
                 if expanded {
-                    HStack(spacing: 8) { ThemeSwitch(dark: $dark); Spacer(); collapseButton }
+                    HStack(spacing: 8) { ProfileButton(account: account, openHome: { page = .home }); ThemeSwitch(dark: $dark); Spacer(); collapseButton }
                 } else {
-                    VStack(spacing: 8) { collapseButton; ThemeSwitch(dark: $dark) }
+                    VStack(spacing: 8) { ProfileButton(account: account, openHome: { page = .home }); collapseButton; ThemeSwitch(dark: $dark) }
                 }
             }
             .padding(.top, 6)
@@ -290,7 +296,7 @@ private struct Sidebar: View {
 
     /// Wide: the icon, its name beside it, and a cream pill behind the current page.
     private func row(_ target: HomeView.Page) -> some View {
-        let selected = page == target
+        let selected = (page == .voice && !account.showsVoiceTab ? .home : page) == target
         return Button { page = target } label: {
             HStack(spacing: 10) {
                 Image(systemName: target.systemImage)
@@ -316,7 +322,7 @@ private struct Sidebar: View {
     /// Narrow: a rounded tile with a filled icon and the page's name under it. The current page's
     /// tile is cream with a pink icon, like the icons on the cards.
     private func tile(_ target: HomeView.Page) -> some View {
-        let selected = page == target
+        let selected = (page == .voice && !account.showsVoiceTab ? .home : page) == target
         return Button { page = target } label: {
             VStack(spacing: 4) {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1041,5 +1047,65 @@ private struct NumbersCard: View {
 
     static func duration(_ minutes: Int) -> String {
         minutes < 60 ? "\(minutes) min" : String(format: "%dh %02dm", minutes / 60, minutes % 60)
+    }
+}
+
+/// Your Google picture at the bottom of the sidebar: click it for your name, email and Log out.
+/// Signed out, it's a plain person icon that leads to Home's sign-in.
+private struct ProfileButton: View {
+    @ObservedObject var account: Account
+    let openHome: () -> Void
+    @State private var showing = false
+
+    var body: some View {
+        Button {
+            if account.isSignedIn { showing.toggle() } else { openHome() }
+        } label: {
+            avatar.frame(width: 30, height: 30).clipShape(Circle())
+                .overlay(Circle().strokeBorder(Palette.cream.opacity(0.6), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .help(account.isSignedIn ? "Your account" : "Sign in with Google")
+        .popover(isPresented: $showing, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    avatar.frame(width: 40, height: 40).clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(account.user?.name ?? "Signed in").font(.system(size: 14, weight: .bold))
+                        if let email = account.user?.email {
+                            Text(email).font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Text("Logging out pauses voice typing and removes your key from this Mac. It comes back when you log in again.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 240, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(role: .destructive) {
+                    showing = false
+                    account.signOut()
+                } label: {
+                    Label("Log out", systemImage: "rectangle.portrait.and.arrow.right").frame(maxWidth: .infinity)
+                }
+                .controlSize(.large)
+            }
+            .padding(16)
+        }
+    }
+
+    @ViewBuilder private var avatar: some View {
+        if account.isSignedIn, let link = account.user?.avatar, let url = URL(string: link) {
+            AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { initials }
+        } else if account.isSignedIn {
+            initials
+        } else {
+            Image(systemName: "person.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.white.opacity(0.85))
+                .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.white.opacity(0.12))
+        }
+    }
+
+    private var initials: some View {
+        Text(String((account.user?.name ?? account.user?.email ?? "?").prefix(1)).uppercased())
+            .font(.system(size: 13, weight: .heavy)).foregroundStyle(Palette.ink)
+            .frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.cream)
     }
 }

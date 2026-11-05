@@ -208,7 +208,7 @@ enum ProviderName {
         message.range(of: "free tier is not available", options: .caseInsensitive) != nil
     }
 
-    static let freePlanOff = "The provider has turned off the free plan for this Google account, so its keys don't work without billing. Set up a key with a Google account you've used for a while, or switch to Model 2, which needs no key."
+    static let freePlanOff = "The provider isn't giving this Google account the free plan right now. Use the account as usual and try again in a few hours or tomorrow, or set up with a Google account you use every day."
 
     static func hide(_ message: String) -> String {
         if isFreePlanOff(message) { return freePlanOff }

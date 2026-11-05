@@ -27,6 +27,7 @@ create table if not exists public.profiles (
   my_words jsonb not null default '[]',
   mix_ups jsonb not null default '[]',
   api_key text,
+  settings jsonb,
   updated_at timestamptz not null default now()
 );
 alter table public.profiles enable row level security;

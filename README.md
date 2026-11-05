@@ -92,14 +92,11 @@ Your words are pasted within a second of letting go, and also copied, so you can
 
 ![The Voice page: engine, keys, and Clean-up with your own instructions](Design/Screenshots/voice.png)
 
-**No key yet?** Home shows two ways to set up voice typing, with what's good and what to keep in mind about each:
+**Getting started:** sign in with Google on Home. MicFlow turns on voice typing, makes your free API key in your own Google account (no copying or pasting), and saves your preferences, instructions, shortcuts and settings to your account, so they all come back on any Mac you sign in on. A short guide first shows the Google screens you'll see and what to click; if Google asks you to accept its terms (one or two pages), MicFlow opens each one, ticks them off as you go, and notices by itself when you're done.
 
-1. **Set it up for me with Google**: a short guide shows the Google screens you'll see and what to click, then MicFlow creates your free key in your own Google account and saves it. If Google asks you to accept its terms (one or two pages), MicFlow opens each page in the right account, shows which page you're on, and notices by itself when you're done.
-2. **Create a key yourself and paste it**: MicFlow never asks for access to your Google account.
+If Google won't make a key for your account (Google decides this, partly from how the account has been used), MicFlow explains what to do and lets you paste a key of your own. Your key stays in your Mac's Keychain, and your account keeps only a locked (encrypted) copy. The Voice Typing tab appears once you're signed in.
 
-Either way, the key is saved in your Mac's Keychain only; we can't see it or use it. Every other page shows a reminder with a **Set up** button until voice typing is ready. Prefer no key at all? Model 2 needs none.
-
-![Home's two ways to set up voice typing](Design/Screenshots/home-setup.jpg)
+![Home before you sign in](Design/Screenshots/home-setup.jpg)
 
 ![The step-by-step guide before signing in with Google](Design/Screenshots/key-guide.jpg)
 
@@ -152,7 +149,7 @@ Change any shortcut in **Capture › Shortcuts**. After each capture, a preview 
 - **Figma zoom:** swipe up or down on the mouse to zoom the Figma canvas.
 
 ### ⚙️ Settings
-- **Account (optional):** sign in with Google to save your instructions, words, mix-ups and API key, so they come back on a new Mac. No key yet? Signing in sets one up for you, in your own account.
+- **Account:** sign in with Google to use voice typing. Your instructions, words, mix-ups, shortcuts, settings and a locked copy of your API key are saved to your account and come back on a new Mac. Click your picture at the bottom left of the sidebar to log out.
 - **Feature Requests:** vote for the ideas you want (no sign-in needed), or sign in to post one with pictures and comment. You can delete your own posts and comments.
 - **Updates:** MicFlow updates itself when a new version is out. Your settings, key and permissions stay as they are.
 - **About:** who makes MicFlow, and how to reach me on WhatsApp, LinkedIn or Facebook. Feature requests welcome!
