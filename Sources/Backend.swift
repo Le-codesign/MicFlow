@@ -350,7 +350,18 @@ enum PreferenceSync {
         case .clear: row["api_key"] = NSNull()
         case .keep: row.removeValue(forKey: "api_key")
         }
-        if hasSettingsColumn { row["settings"] = settings }
+        if hasSettingsColumn {
+            // Other devices (the Android app) keep their own values in the same list: keep those,
+            // and replace only the Mac's own settings.
+            var merged = settings
+            if let data = try? await Backend.request("GET", "/rest/v1/profiles", query: [
+                URLQueryItem(name: "id", value: "eq.\(user.id)"), URLQueryItem(name: "select", value: "settings"),
+            ], token: token),
+               let saved = ((try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]])?.first?["settings"] as? [String: Any] {
+                for (key, value) in saved where !SettingsSync.keys.contains(key) { merged[key] = value }
+            }
+            row["settings"] = merged
+        }
         do {
             _ = try await Backend.request("POST", "/rest/v1/profiles", json: [row], token: token,
                                           prefer: "resolution=merge-duplicates,return=minimal")
