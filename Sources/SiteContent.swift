@@ -162,6 +162,7 @@ final class SiteContentStore: ObservableObject {
 
     /// Shows `content` and keeps it for next time.
     func apply(_ content: SiteContent) {
+        MicFlowNotifier.shared.notifyNewPosts(content.posts)
         if self.content != content { self.content = content }
         if let data = try? Self.encode(content) { try? data.write(to: cacheFile, options: .atomic) }
     }

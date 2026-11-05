@@ -130,14 +130,7 @@ final class Updater: ObservableObject {
     private func notify(_ version: String) {
         guard defaults.string(forKey: Self.notifiedKey) != version else { return }
         defaults.set(version, forKey: Self.notifiedKey)
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = "MicFlow \(version) is ready"
-            content.body = "Open MicFlow → Settings and click Update. Your settings and permissions stay as they are."
-            center.add(UNNotificationRequest(identifier: "micflow-update-\(version)", content: content, trigger: nil))
-        }
+        MicFlowNotifier.shared.notifyUpdate(version)
     }
 
     // MARK: Installing

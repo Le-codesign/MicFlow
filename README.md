@@ -98,6 +98,8 @@ If Google won't make a key for your account (Google decides this, partly from ho
 
 ![Home before you sign in](Design/Screenshots/home-setup.jpg)
 
+**Step-by-step install guide (Mac and Android, with pictures):** [MicFlow-Install-Guide.pdf](Guide/MicFlow-Install-Guide.pdf). It covers opening MicFlow the first time on a Mac, getting past Play Protect on Android, the permissions, signing in, and what to do if Google won't make a key for your account.
+
 ![The step-by-step guide before signing in with Google](Design/Screenshots/key-guide.jpg)
 
 ### 🎛️ Preferences

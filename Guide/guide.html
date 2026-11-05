@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MicFlow Install Guide</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  :root { --green:#2B5036; --card:#335E41; --yellow:#FFB413; --pink:#F66399; --cream:#FBEBC9; --ink:#141414; --grey:#5d5d5d; --mint:#DDF3E2; --mintText:#2E9E57; --orange:#F2621F; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3 { font-family: "Avenir Next Condensed", "Helvetica Neue", Arial, sans-serif; font-weight: 800; letter-spacing: -0.01em; }
+  h1 { font-size: 34pt; line-height: 1.05; margin: 0 0 8px; }
+  h2 { font-size: 22pt; margin: 0 0 6px; }
+  h3 { font-size: 14pt; margin: 18px 0 6px; }
+  p { margin: 6px 0; }
+  .cover { background: var(--green); color: white; border-radius: 24px; padding: 40px 34px; height: 250mm; display: flex; flex-direction: column; justify-content: space-between; }
+  .cover .hero { background: var(--yellow); color: var(--ink); border-radius: 22px; padding: 28px; }
+  .cover .hero p { font-size: 13pt; color: #3a3a3a; }
+  .sticker { display: inline-block; background: var(--pink); color: var(--cream); border: 4px solid white; border-radius: 14px; padding: 8px 14px; font-weight: 800; transform: rotate(-8deg); font-size: 16pt; }
+  .toc { background: var(--card); border-radius: 18px; padding: 18px 22px; }
+  .toc ol { margin: 6px 0 0 18px; padding: 0; } .toc li { margin: 4px 0; }
+  .part { page-break-before: always; }
+  .banner { background: var(--yellow); border-radius: 18px; padding: 16px 20px; margin-bottom: 14px; }
+  .banner p { color: #333; }
+  .step { display: flex; gap: 12px; margin: 14px 0; page-break-inside: avoid; }
+  .num { flex: 0 0 30px; height: 30px; border-radius: 50%; background: var(--orange); color: white; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 12pt; margin-top: 2px; }
+  .body { flex: 1; }
+  .body b { color: var(--ink); }
+  img { display: block; max-width: 100%; border-radius: 12px; border: 1px solid #ddd; margin: 8px 0; }
+  .phone { max-width: 62%; }
+  .phone-sm { max-width: 46%; }
+  .row { display: flex; gap: 10px; align-items: flex-start; } .row img { flex: 1; min-width: 0; }
+  .note { background: var(--mint); border-radius: 12px; padding: 10px 14px; margin: 10px 0; page-break-inside: avoid; }
+  .note b { color: var(--mintText); }
+  .warn { background: #FFF1E8; border-left: 5px solid var(--orange); border-radius: 10px; padding: 10px 14px; margin: 10px 0; page-break-inside: avoid; }
+  .problem { border: 1px solid #e3e3e3; border-radius: 14px; padding: 12px 16px; margin: 12px 0; page-break-inside: avoid; }
+  .problem h3 { margin-top: 0; color: var(--orange); }
+  .tag { display: inline-block; background: var(--cream); border-radius: 999px; padding: 1px 9px; font-size: 9pt; font-weight: 700; }
+  code { background: #f2f2f0; padding: 1px 5px; border-radius: 5px; }
+  .small { font-size: 9.5pt; color: var(--grey); }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div>
+    <span class="sticker">MicFlow</span>
+    <div class="hero" style="margin-top:28px">
+      <h1>Install guide for Mac and Android</h1>
+      <p>Install MicFlow, sign in with Google, get voice typing working, and fix the problems people most often hit along the way.</p>
+    </div>
+  </div>
+  <div class="toc">
+    <b>What's inside</b>
+    <ol>
+      <li>Mac: download, open it the first time, sign in</li>
+      <li>Android: download, get past Play Protect, allow the permissions, sign in</li>
+      <li>Signing in and your voice key: problems and how to fix them</li>
+      <li>Updates and notifications</li>
+    </ol>
+  </div>
+  <p class="small" style="color:#cfe0d3">Why the extra steps? MicFlow is free and isn't sold through Apple's App Store or Google Play, so your Mac and phone ask you to confirm that you trust it. This guide shows exactly what to tap.</p>
+</section>
+
+<!-- ======================= MAC ======================= -->
+<section class="part">
+  <div class="banner"><h2>1 &middot; MicFlow on your Mac</h2>
+    <p>About 3 minutes. You'll need your Mac's login password once.</p></div>
+
+  <h3>Download and install</h3>
+  <div class="step"><div class="num">1</div><div class="body">
+    Go to <b>github.com/abdulllahel/MicFlow/releases/latest</b> and download <code>MicFlow-x.x.dmg</code> (the number is the version).</div></div>
+  <div class="step"><div class="num">2</div><div class="body">
+    Open the downloaded file and drag <b>MicFlow</b> onto the <b>Applications</b> folder in the same window.</div></div>
+
+  <h3>Open it the first time</h3>
+  <p>Apple checks every app from outside the App Store. Because MicFlow isn't signed with Apple's paid developer certificate, macOS blocks it the first time. Here's how to allow it once.</p>
+  <div class="step"><div class="num">3</div><div class="body">
+    Open MicFlow from Applications. macOS says <b>"MicFlow" Not Opened</b>. Click <b>Done</b> (not Move to Trash).
+    <img class="phone-sm" src="img/mac_1_notopened.jpg"></div></div>
+  <div class="step"><div class="num">4</div><div class="body">
+    Open <b>System Settings › Privacy &amp; Security</b> and scroll down to <b>Security</b>. Next to <i>"MicFlow" was blocked to protect your Mac</i>, click <b>Open Anyway</b>. (This button is there for about an hour after you tried to open MicFlow.)
+    <img src="img/mac_2_privacy.jpg"></div></div>
+  <div class="step"><div class="num">5</div><div class="body">
+    Enter your Mac's login password and click <b>OK</b>.
+    <img class="phone-sm" src="img/mac_3_password.jpg"></div></div>
+  <div class="step"><div class="num">6</div><div class="body">
+    macOS asks once more: <b>Open "MicFlow"?</b> Click <b>Open Anyway</b>. From now on MicFlow opens normally.
+    <img class="phone-sm" src="img/mac_4_openanyway.jpg"></div></div>
+  <div class="step"><div class="num">7</div><div class="body">
+    If MicFlow says it's running from Downloads or the disk image, click <b>Move to Applications</b>. That lets it update itself later.
+    <img class="phone-sm" src="img/mac_5_move.jpg"></div></div>
+
+  <h3>Allow the microphone and Accessibility</h3>
+  <div class="step"><div class="num">8</div><div class="body">
+    When macOS asks to let MicFlow use the <b>microphone</b>, click <b>Allow</b>.</div></div>
+  <div class="step"><div class="num">9</div><div class="body">
+    For the voice key (hold a key and talk), MicFlow needs <b>Accessibility</b>: open <b>System Settings › Privacy &amp; Security › Accessibility</b> and turn on <b>MicFlow</b>. MicFlow shows a button that opens this page for you.</div></div>
+  <div class="note"><b>Keychain question?</b> If macOS asks whether MicFlow may use its saved items in your Keychain (for example after an update), enter your password and click <b>Always Allow</b>. That's where MicFlow keeps your sign-in and your key.</div>
+
+  <h3>Sign in and start voice typing</h3>
+  <div class="step"><div class="num">10</div><div class="body">
+    On Home, click <b>Sign in with Google</b>. Signing in turns on voice typing, makes your free voice key for you, and saves your settings to your account.
+    <img src="img/home-setup.jpg"></div></div>
+  <div class="step"><div class="num">11</div><div class="body">
+    MicFlow first shows three short slides about Google's screens; click <b>Next</b> through them, then <b>Continue with Google</b>. The same steps are explained below in section 3.
+    <img class="phone" src="img/key-guide.jpg"></div></div>
+  <div class="step"><div class="num">12</div><div class="body">
+    When it's done, Home shows your dashboard. Hold your voice key (Right Ctrl unless you changed it), talk, and let go: your words are typed where your cursor is.
+    <img src="img/mac_home.jpg"></div></div>
+</section>
+
+<!-- ======================= ANDROID ======================= -->
+<section class="part">
+  <div class="banner"><h2>2 &middot; MicFlow on Android</h2>
+    <p>About 5 minutes. Pictures are from a Pixel; other phones look a little different but the steps are the same.</p></div>
+
+  <h3>Download</h3>
+  <div class="step"><div class="num">1</div><div class="body">
+    In Chrome on your phone, open <b>github.com/abdulllahel/MicFlow-Android/releases/latest</b> and tap <code>MicFlow-x.x.apk</code>. Chrome warns <b>File might be harmful</b>: tap <b>Download anyway</b>. (In the picture the file comes from a test computer; yours will say github.com.)
+    <img src="img/and_01_harmful.jpg"></div></div>
+  <div class="step"><div class="num">2</div><div class="body">
+    Tap the downloaded file. The first time, Android asks <b>Allow Chrome to install apps?</b> Tap <b>Only this time</b> or <b>Always allow</b>.
+    <img class="phone" src="img/and_02_allowchrome.jpg"></div></div>
+  <div class="step"><div class="num">3</div><div class="body">
+    Tap <b>Install</b>.
+    <img src="img/and_03_install.jpg"></div></div>
+
+  <h3>If Play Protect blocks it</h3>
+  <p>Google Play Protect may stop apps from outside the Play Store that ask for Accessibility, with <b>App blocked to protect your device</b> and only a <b>Got it</b> button. Tap <b>Got it</b>, then pause Play Protect's scanning for a moment:</p>
+  <img class="phone" src="img/and_04_blocked.jpg">
+  <div class="step"><div class="num">4</div><div class="body">Open the <b>Play Store</b> and tap your <b>profile picture</b> at the top right.
+    <img src="img/and_05_store.jpg"></div></div>
+  <div class="step"><div class="num">5</div><div class="body">Tap <b>Play Protect</b>.
+    <img src="img/and_06_menu.jpg"></div></div>
+  <div class="step"><div class="num">6</div><div class="body">Tap the <b>gear</b> at the top right.
+    <img src="img/and_07_protect.jpg"></div></div>
+  <div class="step"><div class="num">7</div><div class="body">Turn off <b>Scan apps with Play Protect</b>.
+    <img src="img/and_08_toggle.jpg"></div></div>
+  <div class="step"><div class="num">8</div><div class="body">Choose <b>Pause</b>: scanning turns itself back on the next day, so you can't forget it.
+    <img class="phone" src="img/and_09_pause.jpg"></div></div>
+  <div class="step"><div class="num">9</div><div class="body">Go back to Chrome's downloads, tap the MicFlow file again and tap <b>Install</b>, then <b>Open</b>.
+    <div class="row"><img src="img/and_11_install.jpg"><img src="img/and_12_installed.jpg"></div></div></div>
+  <div class="warn">If you chose <b>Turn off</b> instead of Pause, turn <b>Scan apps with Play Protect</b> back on now (and <b>Improve harmful app detection</b>, if you switched that off too). Play Protect doesn't remove MicFlow once it's installed.</div>
+
+  <h3>Sign in</h3>
+  <div class="step"><div class="num">10</div><div class="body">MicFlow opens on its login screen. Tap <b>Sign in with Google</b>, go through the three slides, and follow Google's screens (section 3 explains each one). If you already use MicFlow on a Mac with the same Google account, your key and settings come over by themselves.
+    <div class="row"><img src="img/and_13_login.jpg"><img src="img/and_14_slide2.jpg"></div></div></div>
+
+  <h3>Allow the permissions</h3>
+  <div class="step"><div class="num">11</div><div class="body">Open the <b>Voice Typing</b> tab. It lists what Android still needs, with pictures. Tap <b>Allow the microphone</b>, then <b>While using the app</b>. Also allow <b>notifications</b> when asked, for updates and news.
+    <div class="row"><img src="img/and_16_permcard.jpg"><img src="img/and_15_mic.jpg"></div></div></div>
+  <div class="step"><div class="num">12</div><div class="body">Tap <b>Open Accessibility</b>, then <b>MicFlow voice typing</b>. Because MicFlow came from a download, Android first says <b>App was denied access</b> and shows MicFlow greyed out (<i>Controlled by Restricted Setting</i>). Tap <b>Close</b>.
+    <img src="img/and_17_denied.jpg"></div></div>
+  <div class="step"><div class="num">13</div><div class="body">Open MicFlow's <b>App info</b> (Settings › Apps › MicFlow, or the button in MicFlow), tap <b>⋮</b> at the top right and choose <b>Allow restricted settings</b>. Confirm with your PIN or fingerprint; Android confirms <i>Restricted settings allowed for MicFlow</i>.
+    <div class="row"><img src="img/and_18_menu.jpg"><img src="img/and_19_allowed.jpg"></div></div></div>
+  <div class="step"><div class="num">14</div><div class="body">Back in <b>Accessibility › MicFlow voice typing</b>, turn on <b>Use MicFlow voice typing</b> and tap <b>Allow</b>.
+    <img src="img/and_20_toggle.jpg">
+    <img class="phone" src="img/and_21_fullcontrol.jpg">
+    <img src="img/and_22_on.jpg"></div></div>
+  <div class="step"><div class="num">15</div><div class="body">Done. Tap any text box in any app: a green round <b>mic bubble</b> appears beside it. Tap it, speak English, Bengali or both, and it types for you. It stops when you stop talking.</div></div>
+  <div class="note"><b>Another voice app installed?</b> If you also use another dictation app with its own bubble (for example a grey square one), its bubble can sit on top of MicFlow's. Turn the other app off in Accessibility, or in MicFlow › Voice Typing tap <b>Put the bubble back beside the text box</b>.</div>
+</section>
+
+<!-- ======================= TROUBLESHOOTING ======================= -->
+<section class="part">
+  <div class="banner"><h2>3 &middot; Signing in and your voice key</h2>
+    <p>What Google shows while MicFlow makes your free key, and what to do when something goes wrong. The same on Mac and Android.</p></div>
+
+  <h3>The screens you'll see</h3>
+  <div class="step"><div class="num">1</div><div class="body"><b>"Google hasn't verified this app"</b>. Google's review of MicFlow isn't finished yet. Tap <b>Advanced</b>, then <b>Go to … (unsafe)</b>. MicFlow only uses this access to make your key.
+    <img src="img/Guide-Advanced.jpg"></div></div>
+  <div class="step"><div class="num">2</div><div class="body"><b>Tick the Google Cloud box.</b> This is the important one: without the tick MicFlow can't make your key. Then tap <b>Continue</b>.
+    <img src="img/Guide-Tick.jpg"></div></div>
+  <div class="step"><div class="num">3</div><div class="body"><b>Accept Google's terms</b>, only once per account: one or two pages (the <i>Google APIs Terms of Service</i>, then the voice model's terms). MicFlow opens each page for you in the right account, ticks them off as you go, and notices by itself; if it doesn't, tap <b>I've accepted</b>.
+    <img class="phone" src="img/Guide-Accept.jpg"></div></div>
+
+  <h3>Problems and fixes</h3>
+  <div class="problem"><h3>"The Google Cloud box wasn't ticked"</h3>
+    <p>You continued without ticking the box on Google's permission screen. Tap <b>Try again</b> and tick it this time.</p></div>
+
+  <div class="problem"><h3>The terms page says "already been accepted", but MicFlow keeps waiting</h3>
+    <p>The page opened in a different Google account than the one you signed in with. Tap your picture at the top right of the page, switch to the account MicFlow shows, and accept there.</p>
+    <img src="img/Guide-OtherAccount.jpg"></div>
+
+  <div class="problem"><h3>"This Google account can't get a voice key yet"</h3>
+    <p>Google decides which accounts get the free key, partly from how the account has been used. Google's own words:</p>
+    <img src="img/Guide-GoogleNote.jpg">
+    <p><b>What we found:</b> Google accounts that hadn't been used for a long time couldn't get a key. After using them normally for a day (Gmail, YouTube, search), Google let them make one. Brand-new accounts are often refused at first too.</p>
+    <p><b>What to do:</b></p>
+    <ul>
+      <li>Try again with a Google account you use every day. On Google's screen, pick that account (Google shows its account list each time).</li>
+      <li>Or use the refused account normally for a while and try again in a few hours or tomorrow.</li>
+      <li>Or, if you made a new account just for this, use it for a day first, then try again.</li>
+      <li>Or paste a key of your own (below).</li>
+    </ul></div>
+
+  <div class="problem"><h3>"Your key needs replacing"</h3>
+    <p>Google stopped accepting the key from the account it was made in (its free plan was turned off). Set it up again, preferably with a Google account you use regularly, or paste a key of your own.</p></div>
+
+  <div class="problem"><h3>Paste a key of your own</h3>
+    <p>Shown after Google wouldn't make a key. Open the key page (MicFlow has a button for it), sign in, tap <b>Create API key</b>, copy it, paste it into MicFlow and tap <b>Save</b>. MicFlow checks it before saving. A key made in an account whose free plan is off won't work either; MicFlow will tell you.</p></div>
+
+  <div class="problem"><h3>"You closed Google's sign-in before it finished" / "Sign-in stopped on Google's screen"</h3>
+    <p>The browser window was closed, or <b>Back to safety</b> was tapped on the warning screen. Sign in again and follow the three screens above.</p></div>
+
+  <div class="problem"><h3>"MicFlow couldn't reach Google"</h3>
+    <p>Check your internet connection and try again.</p></div>
+
+  <div class="problem"><h3>Your key and settings on a new device</h3>
+    <p>Your key is kept on your device, and your account keeps a locked (encrypted) copy. Sign in with the same Google account on another Mac or phone and voice typing works straight away, with your words, mix-ups and instructions. Logging out removes the key from that device; it comes back when you log in again.</p></div>
+</section>
+
+<section class="part">
+  <div class="banner"><h2>4 &middot; Updates and notifications</h2></div>
+  <p><b>Mac:</b> MicFlow checks for new versions by itself and usually installs them on its own. When a new version is out you also get a notification with an <b>Update now</b> button: one click and MicFlow updates and restarts. New posts in <b>What's New</b> arrive as notifications too; click one to read it.</p>
+  <p><b>Android:</b> MicFlow checks about every hour and notifies you about a new version and new What's New posts. Tap <b>Update now</b>: MicFlow downloads the update and Android shows its installer, where you tap <b>Update</b> (Android always asks you to confirm an install). The first time, Android may ask you to allow MicFlow to install apps: turn on <b>Allow from this source</b>.</p>
+  <p>Updates never reset your settings, shortcuts, words or key.</p>
+  <div class="note"><b>Need help or have an idea?</b> Open <b>Settings › Feature Requests</b> in MicFlow to post it, vote, and comment.</div>
+</section>
+</body>
+</html>
